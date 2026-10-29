@@ -47,6 +47,12 @@ SKIP = re.compile(r"(avito|ozon|wildberries|yandex|ya\.ru|2gis|pulscen|agroserve
 LINKS = re.compile(r"контакт|contact|kontakt|доставк|dostavk|delivery|shipping|оплат|oplat|payment|о[ -]компании|"
                    r"about|o-kompanii|company|реквизит|rekvizit|сертифик|sertif|certif|документ|document|прайс|"
                    r"price|оптов|optov|wholesale|сотрудничеств|partner|horeca|условия", re.I)
+# какие страницы обходить первыми: условия поставки чаще всего на «доставке и оплате», реже в «о компании»
+PRIORITY = [re.compile(rx, re.I) for rx in (
+    r"доставк|dostavk|delivery|shipping|оплат|oplat|payment|услови|uslovi",
+    r"(?<![а-яё])опт|optov|wholesale|horeca|хорека|сотрудничеств|partner|прайс|price",
+    r"контакт|contact|kontakt|реквизит|rekvizit",
+    r"сертифик|sertif|certif|документ|document")]
 CATALOG = re.compile(r"каталог|catalog|продукци|produkci|ассортимент|assortiment|products?(?![a-z])|shop", re.I)
 
 _robots, _last, _lock = {}, {}, threading.Lock()
@@ -249,7 +255,7 @@ def yandex_category(c, cat, city, log, extra="", fresh=False):
 # --- сайты поставщиков ------------------------------------------------------------------------------------
 
 def crawl(site):
-    """Главная + до 4 страниц (контакты, доставка, о компании, документы) + страница каталога.
+    """Главная + до 6 страниц (сначала доставка и оплата, опт, контакты, документы, о компании) + страница каталога.
     → [(url, весь текст, основной контент, название, ссылки на прайсы)]"""
     html = get(site)
     if not html:
@@ -271,10 +277,11 @@ def crawl(site):
             for rx, lst in ((LINKS, cand), (CATALOG, shop)):
                 if rx.search(href + " " + label):
                     seen.add(u.rstrip("/"))
-                    lst.append(u)
+                    lst.append((next((i for i, p in enumerate(PRIORITY) if p.search(href + " " + label)), 9), u))
                     break
     pages.append((site, text_of(tree), main_of(html), name))
-    for u in cand[:4] + shop[:1]:  # страница каталога — там цены за кг у интернет-магазинов опта
+    cand.sort(key=lambda x: x[0])  # sort устойчивая: внутри приоритета — порядок ссылок на странице
+    for _, u in cand[:6] + shop[:1]:  # страница каталога — там цены за кг у интернет-магазинов опта
         h = get(u)
         if h:
             pages.append((u, text_of(HTMLParser(h)), main_of(h), ""))
@@ -317,10 +324,14 @@ def enrich_sites(c, log, only_ids=None, again=False):
                     core.add_facts(c, r["id"], core.extract(text, main), url, "сайт")
                     for f_url, label in files:
                         core.add_facts(c, r["id"], {"price_list": [(f_url, label)]}, url, "сайт")
-                for f_url, table in prices.items():
-                    core.add_facts(c, r["id"], core.price_list(table or []), f_url, "прайс")
                     if name:  # og:site_name / title главной точнее, чем заголовок страницы из выдачи
                         c.execute("update suppliers set name=? where id=?", (name[:80], r["id"]))
+                for f_url, table in prices.items():
+                    core.add_facts(c, r["id"], core.price_list(table or []), f_url, "прайс")
+                    # в шапке прайса — реквизиты и контакты: ИНН, телефон, email (условия — только из позиций)
+                    head = "\n".join(" ".join(x for x in row if x) for row in (table or [])[:40])
+                    core.add_facts(c, r["id"], {k: v for k, v in core.extract(head, "").items()
+                                                if k in ("inn", "phone", "email")}, f_url, "прайс")
                 inns = {v for (v,) in c.execute("select value from facts where supplier_id=? and field='inn'",
                                                 (r["id"],))}
                 if len(inns) == 1:  # несколько ИНН на сайте (агрегатор, партнёры) — не склеиваем

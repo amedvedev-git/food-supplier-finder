@@ -1,5 +1,6 @@
 {% from "_icons.html" import icon %}
-{% set SRC = {'yandex': 'выдача Яндекса', 'сайт': 'сайт поставщика', 'прайс': 'прайс-лист поставщика', 'productcenter': 'каталог productcenter.ru'} %}
+{% set SRC = {'yandex': 'выдача Яндекса', 'сайт': 'сайт поставщика', 'прайс': 'прайс-лист поставщика', 'productcenter': 'каталог productcenter.ru', 'КП': 'ответ на КП, внёс закупщик'} %}
+{% set reload = '/s/' ~ s.id ~ '/panel?cat=' ~ s.cat ~ '&city=' ~ (p.city|urlencode) ~ '&net=' ~ p.net %}
 {% macro facts(k, limit=4) -%}
 {% set arr = (s.facts[k] or [])[:limit] %}
 {% if not arr %}<span class="gap">Нет в открытых источниках — спросим в запросе КП</span>{% endif %}
@@ -9,8 +10,9 @@
   {%- elif k == 'price_list' %}<a href="{{ v[0] }}" target="_blank" rel="noopener">{{ v[1] or 'прайс-лист' }}</a>
   {%- else %}{{ v[0] }}{% endif %}</div>
   <details class="src"><summary>{{ SRC.get(v[3], v[3]) }} · {{ v[4][:10] }}</summary>
-    {% if v[1] and k != 'price_list' and v[1] != v[0] %}<blockquote>{{ v[1] }}</blockquote>{% endif %}
-    <a href="{{ v[2] }}" target="_blank" rel="noopener">{{ v[2]|host }}{{ icon('external', 'sm') }}</a></details></div>
+    {% if v[1] and k != 'price_list' and v[1] != v[0] and v[3] != 'КП' %}<blockquote>{{ v[1] }}</blockquote>{% endif %}
+    {% if v[2] %}<a href="{{ v[2] }}" target="_blank" rel="noopener">{{ v[2]|host }}{{ icon('external', 'sm') }}</a>{% endif %}
+    {% if v[3] == 'КП' %}<button class="kpdel" type="button" data-field="{{ k }}" data-value="{{ v[0] }}" data-kp="/s/{{ s.id }}/kp" data-reload="{{ reload }}">Удалить</button>{% endif %}</details></div>
 {% endfor %}
 {%- endmacro %}
 <div class="card3" role="region" aria-label="Карточка: {{ s.name }}">
@@ -63,6 +65,15 @@
       <h3>Заметка</h3>
       <textarea name="note" class="note" placeholder="Например: звонили 30.10, ждём прайс до пятницы">{{ s.mark.note }}</textarea>
       <p class="small muted">Статус и заметка сохраняются сразу; поставщик со статусом тоже попадает в шортлист.</p>
+    </form>
+    <form class="kpform" action="/s/{{ s.id }}/kp" method="post" data-reload="{{ reload }}">
+      <h2>Ответ поставщика на КП</h2>
+      <p class="small muted">Что поставщик ответил на запрос — добавится в карточку как факт с пометкой «ответ на КП», зажжёт огонёк и уберёт вопрос из письма.</p>
+      <div class="kpgrid">
+        {% for k, label, ph in [('price', 'Цена', '1 250 ₽/кг, лосось 4–5 кг'), ('moq', 'Мин. заказ', 'от 20 кг'), ('delivery', 'Доставка', 'по городу 2 раза в неделю, бесплатно от 15 000 ₽'), ('docs', 'Документы', 'декларации, ветсвидетельства в Меркурии')] %}
+        <label>{{ label }}<input name="{{ k }}" maxlength="200" placeholder="{{ ph }}" autocomplete="off"></label>{% endfor %}
+      </div>
+      <div class="actions"><button class="btn ghost" type="submit">Добавить в карточку</button></div>
     </form>
   </section>
 </div>

@@ -222,6 +222,25 @@ async def mark(sid: int, request: Request):
     return JSONResponse({"ok": True, "n": shortlist_n(c)})
 
 
+KP_FIELDS = ("price", "moq", "delivery", "docs")
+
+
+@app.post("/s/{sid}/kp")
+async def kp(sid: int, request: Request):
+    """Ответ поставщика на КП: закупщик вносит цену, мин. заказ, доставку, документы — они становятся фактами
+    карточки (источник «КП»), зажигают огоньки, дают баллы и убирают вопрос из письма. delete — убрать свой факт."""
+    f = await request.form()
+    c = db()
+    if f.get("delete"):
+        c.execute("delete from facts where supplier_id=? and field=? and value=? and source=?",
+                  (sid, f.get("field"), f.get("delete"), core.KP))
+    else:
+        core.add_facts(c, sid, {k: [(v.strip()[:200], "Из ответа поставщика на запрос КП, внёс закупщик")]
+                                for k in KP_FIELDS if (v := f.get(k) or "").strip()}, "", core.KP)
+    c.commit()
+    return JSONResponse({"ok": True})
+
+
 @app.post("/s/{sid}/star")
 def star(sid: int):
     c = db()

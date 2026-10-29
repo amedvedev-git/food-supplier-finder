@@ -42,6 +42,7 @@ DELIVERY = [(label, re.compile(rx, re.I)) for label, rx in [
 DELIVERY_ORDER = ["по городу", "по области", "по России", "бесплатно от", "на следующий день", "свой транспорт",
                   "через ТК", "самовывоз"]  # порядок показа: зона, порог бесплатной доставки, срок, способ
 _FREE = re.compile(r"бесплатн\w*.{0,40}?от\s+(\d[\d\s.]*?)\s*(тыс\w*\.?\s*)?(?:₽|руб|р\.)", re.I)
+KP = "КП"  # источник фактов, которые закупщик внёс из ответа поставщика на запрос КП
 MAX_KG = 15000  # ₽ за кг или литр дороже — почти всегда не та позиция прайса или ошибка разбора
 DOCS = [
     ("Декларация соответствия", r"декларац\w*\s+(?:о\s+)?соответстви"),
@@ -303,7 +304,7 @@ def score(s: dict, cat: str, city: str):
             miss.append(label)
 
     # условия: баллы только за разобранные значения, цена — только по товару этой категории
-    prices = [p[0] for p in facts.get("price") or [] if price_ok(p[0], p[1], cat)]
+    prices = [p[0] for p in facts.get("price") or [] if price_counts(p, cat)]
     for pts, label, v in ((4, "цена", prices[:1]), (3, "минимальный заказ", vals("moq")[:1]),
                           (3, "условия доставки", vals("delivery")[:4])):
         if v:
@@ -350,9 +351,14 @@ def price_ok(value: str, quote: str, cat: str) -> bool:
     return not (re.search(r"(?:/|за)\s*(?:кг|л)(?![а-яё])", value) and num > MAX_KG)
 
 
+def price_counts(p, cat: str) -> bool:
+    """Цена засчитывается категории: из ответа на КП — всегда (закупщик спрашивал именно её), иначе — price_ok."""
+    return (len(p) > 3 and p[3] == KP) or price_ok(p[0], p[1], cat)
+
+
 def focus(s: dict, cat: str, city: str) -> dict:
     """Поставщик глазами категории и города: цены только по её товарам, рейтинг, пробелы."""
-    s["facts"]["price"] = [p for p in s["facts"].get("price") or [] if price_ok(p[0], p[1], cat)]
+    s["facts"]["price"] = [p for p in s["facts"].get("price") or [] if price_counts(p, cat)]
     s["score"], s["why"], s["miss"] = score(s, cat, city)
     s["cat"] = cat
     return s

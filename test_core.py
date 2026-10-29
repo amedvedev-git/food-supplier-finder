@@ -1,5 +1,5 @@
 """Проверки чистой логики: извлечение фактов из текста и рейтинг. Запуск: python test_core.py"""
-from core import extract, inn_valid, norm_phone, score, focus, categorize, pick_name, better_name, host, price_list, price_ok
+from core import extract, inn_valid, norm_phone, score, focus, categorize, pick_name, better_name, host, price_list, price_ok, price_counts
 
 # Реальное объявление с agroserver (29.10.2026)
 AGRO = ("Предлагаем к оптовой продаже минтай размера 25+ по ГОСТ. Производитель: Крабозаводск / Ясный. "
@@ -185,6 +185,13 @@ def test_price_list():
     assert price_ok(v, q, "salmon") and not price_ok(v, q, "rice")
     v, q = "25 ₽/уп — Приправа д/говядины 15гр. 1*40", "Приправа д/говядины 15гр. 1*40"
     assert not price_ok(v, q, "meat")  # товар позиции — приправа, а не говядина
+
+
+def test_kp_price_counts():
+    # цена из ответа на КП засчитывается категории без товара в цитате; с сайта — только с товаром рядом
+    kp = ("1 250 ₽/кг", "Из ответа поставщика на запрос КП, внёс закупщик", "", "КП", "2026-10-29")
+    site = ("1 250 ₽/кг", "Доставка по городу. Цена 1 250 ₽/кг", "https://x.ru", "сайт", "2026-10-29")
+    assert price_counts(kp, "salmon") and not price_counts(site, "salmon")
 
 
 def test_score_max_is_100():
