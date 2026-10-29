@@ -8,6 +8,8 @@
 """
 import argparse
 import base64
+import gzip
+import hashlib
 import json
 import os
 import re
@@ -20,6 +22,7 @@ from urllib.parse import urljoin, urlparse
 from urllib.robotparser import RobotFileParser
 
 import httpx
+import trafilatura
 from selectolax.lexbor import LexborHTMLParser as HTMLParser
 
 import core
@@ -42,6 +45,25 @@ LINKS = re.compile(r"контакт|contact|kontakt|доставк|dostavk|deliv
                    r"price|оптов|optov|wholesale|сотрудничеств|partner|horeca|условия", re.I)
 
 _robots, _last, _lock = {}, {}, threading.Lock()
+# сырые ответы (страницы, Яндекс, DaData): базу можно пересобрать новыми правилами без обхода и платных запросов.
+# ponytail: без срока годности — для свежих данных удалить data/cache
+CACHE = core.ROOT / "data" / "cache"
+
+
+def cached(key, fetch, fresh=False):
+    """Ответ из кэша или fetch() с записью в кэш. None не кэшируется: неудачный запрос повторится."""
+    f = CACHE / (hashlib.sha1(key.encode()).hexdigest() + ".json.gz")
+    if f.exists() and not fresh:
+        with gzip.open(f, "rt", encoding="utf-8") as fh:
+            return json.load(fh)
+    v = fetch()
+    if v is not None:
+        CACHE.mkdir(parents=True, exist_ok=True)
+        tmp = f.with_name(f"{f.name}.{threading.get_ident()}.tmp")
+        with gzip.open(tmp, "wt", encoding="utf-8") as fh:
+            json.dump(v, fh, ensure_ascii=False)
+        tmp.replace(f)
+    return v
 
 
 class Blocked(Exception):
@@ -63,6 +85,11 @@ def allowed(url) -> bool:
 
 
 def get(url, delay=1.0):
+    """HTML страницы или None: из кэша, иначе с сайта."""
+    return cached("page:" + url, lambda: fetch(url, delay))
+
+
+def fetch(url, delay=1.0):
     """HTML страницы или None. Пауза на хост, robots.txt, лимит 3 МБ."""
     host = core.domain(url)
     if not allowed(url):
@@ -142,10 +169,15 @@ def productcenter(c, catalog, pages, log):
 
 # --- Yandex Search API ------------------------------------------------------------------------------------
 
-def yandex(query, city):
+def yandex(query, city, fresh=False):
+    """Выдача Яндекса по запросу в регионе города: [{url, title, text}]. fresh — мимо кэша (живой поиск)."""
     key, folder = os.environ.get("YANDEX_API_KEY"), os.environ.get("YANDEX_FOLDER_ID")
     if not key or not folder:
         return []
+    return cached(f"yandex:{REGION.get(city, '225')}:{query}", lambda: yandex_api(query, city, key, folder), fresh)
+
+
+def yandex_api(query, city, key, folder):
     body = {"query": {"searchType": "SEARCH_TYPE_RU", "queryText": query, "familyMode": "FAMILY_MODE_MODERATE"},
             "groupSpec": {"groupMode": "GROUP_MODE_DEEP", "groupsOnPage": "20", "docsInGroup": "1"},
             "maxPassages": "3", "region": REGION.get(city, "225"), "l10n": "LOCALIZATION_RU",
@@ -166,10 +198,10 @@ def yandex(query, city):
     return out
 
 
-def yandex_category(c, cat, city, log, extra=""):
+def yandex_category(c, cat, city, log, extra="", fresh=False):
     n_found = 0
     for q in ([extra] if extra else core.CAT[cat]["queries"]):
-        for hit in yandex(f"{q} оптом {city}" if extra else f"{q} {city}", city):
+        for hit in yandex(f"{q} оптом {city}" if extra else f"{q} {city}", city, fresh):
             if SKIP.search(core.domain(hit["url"])):
                 continue
             p = urlparse(hit["url"])
@@ -186,7 +218,8 @@ def yandex_category(c, cat, city, log, extra=""):
 # --- сайты поставщиков ------------------------------------------------------------------------------------
 
 def crawl(site):
-    """Главная + до 4 страниц (контакты, доставка, о компании, документы). → [(url, text, links_to_files)]"""
+    """Главная + до 4 страниц (контакты, доставка, о компании, документы).
+    → [(url, весь текст, основной контент, название, ссылки на прайсы)]"""
     html = get(site)
     if not html:
         return []
@@ -206,12 +239,17 @@ def crawl(site):
         elif LINKS.search(href + " " + label) and u.rstrip("/") not in seen and not re.search(r"\.\w{2,4}$", u):
             seen.add(u.rstrip("/"))
             cand.append(u)
-    pages.append((site, text_of(tree), name))
+    pages.append((site, text_of(tree), main_of(html), name))
     for u in cand[:4]:
         h = get(u)
         if h:
-            pages.append((u, text_of(HTMLParser(h)), ""))
-    return [(u, t, n, files if i == 0 else []) for i, (u, t, n) in enumerate(pages)]
+            pages.append((u, text_of(HTMLParser(h)), main_of(h), ""))
+    return [(*p, files if i == 0 else []) for i, p in enumerate(pages)]
+
+
+def main_of(html):
+    """Основной контент страницы без меню, боковых блоков и футера (алгоритм класса Readability)."""
+    return trafilatura.extract(html, include_tables=True, favor_recall=True) or ""
 
 
 def enrich_sites(c, log, only_ids=None):
@@ -231,10 +269,10 @@ def enrich_sites(c, log, only_ids=None):
             ok = isinstance(res, list) and res
             c.execute("insert or replace into pages values(?,?,?,?)", (r["site"], 200 if ok else 0, "", core.now()))
             if ok:
-                core.add_facts(c, r["id"], {"cats": [(x, "") for x in core.categorize(" ".join(t for _, t, _, _ in res))]},
+                core.add_facts(c, r["id"], {"cats": [(x, "") for x in core.categorize(" ".join(p[1] for p in res))]},
                                r["site"], "сайт")
-                for url, text, name, files in res:
-                    core.add_facts(c, r["id"], core.extract(text), url, "сайт")
+                for url, text, main, name, files in res:
+                    core.add_facts(c, r["id"], core.extract(text, main), url, "сайт")
                     for f_url, label in files:
                         core.add_facts(c, r["id"], {"price_list": [(f_url, label)]}, url, "сайт")
                     if name:  # og:site_name / title главной точнее, чем заголовок страницы из выдачи
@@ -262,14 +300,14 @@ def dadata(c, log):
     if not token:
         log("DaData: нет DADATA_TOKEN — пропускаю")
         return
-    rows = c.execute("select s.id, coalesce(nullif(s.inn, ''), min(f.value)) inn from suppliers s join facts f "
+    rows = c.execute("select s.id, s.name, coalesce(nullif(s.inn, ''), min(f.value)) inn from suppliers s join facts f "
                      "on f.supplier_id=s.id and f.field='inn' where s.legal is null or s.legal='' "
                      "or ((s.city is null or s.city='') and s.legal not like '%НЕ НАЙДЕН%') group by s.id").fetchall()
     for r in rows:
         try:
-            resp = HTTP.post("https://suggestions.dadata.ru/suggestions/api/4_1/rs/findById/party",
-                             json={"query": r["inn"]}, headers={"Authorization": f"Token {token}"})
-            sug = resp.json().get("suggestions") or []
+            sug = cached("dadata:" + r["inn"], lambda: HTTP.post(
+                "https://suggestions.dadata.ru/suggestions/api/4_1/rs/findById/party",
+                json={"query": r["inn"]}, headers={"Authorization": f"Token {token}"}).json().get("suggestions") or [])
         except (httpx.HTTPError, ValueError):
             continue
         if not sug:
@@ -281,9 +319,9 @@ def dadata(c, log):
                  "okved": d.get("okved"), "address": (d.get("address") or {}).get("value"),
                  "years": (datetime.now().year - datetime.fromtimestamp(reg / 1000).year) if reg else None}
         addr = (d.get("address") or {}).get("data") or {}
-        c.execute("update suppliers set legal=?, inn=?, city=coalesce(nullif(city, ''), ?) where id=?",
-                  (json.dumps(legal, ensure_ascii=False), r["inn"], addr.get("city") or addr.get("settlement"),
-                   r["id"]))
+        c.execute("update suppliers set legal=?, inn=?, name=?, city=coalesce(nullif(city, ''), ?) where id=?",
+                  (json.dumps(legal, ensure_ascii=False), r["inn"], core.better_name(r["name"], legal["name"]),
+                   addr.get("city") or addr.get("settlement"), r["id"]))
     c.commit()
     log(f"DaData: проверено {len(rows)} ИНН")
 
@@ -323,8 +361,8 @@ def live(cat, city, extra, log):
     """Живой поиск из интерфейса: Яндекс по категории (+ уточнение) → сайты → DaData."""
     c = core.connect()
     before = {r[0] for r in c.execute("select id from suppliers")}
-    yandex_category(c, cat, city, log, extra)
-    new = {r[0] for r in c.execute("select id from suppliers")} - before
+    yandex_category(c, cat, city, log, extra, fresh=True)
+    new ={r[0] for r in c.execute("select id from suppliers")} - before
     enrich_sites(c, log, only_ids=new)
     dadata(c, log)
     log(f"готово: новых поставщиков {len(new)}")

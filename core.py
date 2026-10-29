@@ -3,6 +3,7 @@
 Без LLM: регулярки + словари. Каждый факт хранится с цитатой и ссылкой на страницу, откуда он взят.
 """
 import json
+import os
 import re
 import sqlite3
 from datetime import datetime
@@ -19,7 +20,7 @@ NETS = {"sushkof": "Сушкоф и пицца", "zhiznmart": "Жизньмар�
 
 # --- извлечение -------------------------------------------------------------------------------------------
 
-_SENT = re.compile(r"(?<=[.!?;])\s+|\n+")
+_SENT = re.compile(r"(?<=[.!?;])\s+(?![а-яёa-z])|\n+")  # точка перед строчной буквой — сокращение («5 тыс. руб.»)
 _INN = re.compile(r"ИНН\D{0,12}?(\d{12}|\d{10})(?!\d)", re.I)
 _PHONE = re.compile(r"(?:\+7|(?<!\d)8)[\s(\-]*\d{3}[\s)\-]*\d{3}[\s\-]*\d{2}[\s\-]*\d{2}(?!\d)")
 _EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)*\.[a-zа-я]{2,}", re.I)
@@ -28,6 +29,18 @@ _MOQ = re.compile(r"минимальн\w*\s+(?:сумм\w*\s+)?(?:заказ\w*|
 _PRICE = re.compile(r"(?:от\s*)?\d{1,3}(?:[  ]?\d{3})*(?:[.,]\d{1,2})?\s*(?:руб\.?|₽|р\.)\s*"
                     r"(?:/|за)\s*(?:кг|л|шт|уп\w*|тонн\w*|т(?![а-яё])|короб\w*|пач\w*|ящ\w*)", re.I)
 _DELIVERY = re.compile(r"доставк|самовывоз|отгрузк|отгружа", re.I)
+# условия доставки: признаки рядом с упоминанием доставки; само упоминание без условий — не факт
+DELIVERY = [(label, re.compile(rx, re.I)) for label, rx in [
+    ("самовывоз", r"самовывоз"),
+    ("по городу", r"по\s+(?:городу|екатеринбургу|тюмени|челябинску|уфе|перми|москве)"),
+    ("по области", r"по\s+(?:\w+\s+)?(?:области|региону|краю|республике)"),
+    ("по России", r"по\s+(?:всей\s+)?(?:территории\s+)?(?:росси|рф(?![а-яё]))|во\s+все\s+регион|по\s+всем\s+регионам"),
+    ("через ТК", r"транспортн\w*\s+компани|(?<![а-яё])тк(?![а-яё])|сдэк|деловы\w*\s+лини|(?<![а-яё])пэк(?![а-яё])"),
+    ("свой транспорт", r"собственн\w*\s+(?:транспорт|автопарк|автомобил|машин)|рефрижератор"),
+    ("на следующий день", r"на\s+следующий\s+день|день\s+в\s+день|в\s+течение\s+суток"),
+]]
+_FREE = re.compile(r"бесплатн\w*.{0,40}?от\s+(\d[\d\s.]*?)\s*(тыс\w*\.?\s*)?(?:₽|руб|р\.)", re.I)
+MAX_KG = 15000  # ₽ за кг или литр дороже — почти всегда не та позиция прайса или ошибка разбора
 DOCS = [
     ("Декларация соответствия", r"декларац\w*\s+(?:о\s+)?соответстви"),
     ("Сертификат соответствия", r"сертификат\w*\s+соответстви"),
@@ -85,8 +98,9 @@ def _cut(s: str, n=160) -> str:
     return s if len(s) <= n else s[:n].rsplit(" ", 1)[0] + "…"
 
 
-_MOQ_VAL = re.compile(r"[\s(:—–-]*((?:от|до)?\s*\d[\d\s.,]*\s*(?:₽|руб\w*\.?|р\.?|кг|тонн\w*|т(?![а-яё])|шт\w*|"
-                      r"короб\w*|уп\w*|л(?![а-яё])|мест\w*)?)", re.I)
+# число с единицей сразу после «минимальный заказ»; без единицы («?», «уточняйте») — не факт
+_MOQ_VAL = re.compile(r"[\s(:—–-]*(?:(?:состав\w*|всего)\s+)?((?:от|до)?\s*\d[\d\s.,]*\s*(?:₽|руб(?:\w+|\.)?|р\.?(?![а-яё])|кг|"
+                      r"тонн\w*|т(?![а-яё])|шт\w*|короб\w*|уп\w*|л(?![а-яё])|мест\w*))", re.I)
 
 
 def _win(s: str, m, before=50, after=110) -> str:
@@ -99,17 +113,40 @@ def _win(s: str, m, before=50, after=110) -> str:
     return ("…" if a else "") + s[a:b] + ("…" if b < len(s) else "")
 
 
-def extract(text: str) -> dict:
-    """Факты из текста: {поле: [(значение, цитата), ...]}, плюс флаги wholesale / restaurant."""
+def extract(text: str, main: str = None) -> dict:
+    """Факты из текста: {поле: [(значение, цитата), ...]}, плюс флаги wholesale / restaurant.
+    main — основной контент страницы без меню, боковых блоков и футера. Условия (цена, заказ, доставка, документы)
+    берём из него, контакты и географию — из всего текста: они как раз часто в футере."""
     text = re.sub(r"[ \t ]+", " ", text)
-    sents = [s for s in _SENT.split(text) if s.strip()]
+    sents = lambda t: [s for s in _SENT.split(t) if s.strip()]  # noqa: E731
     f = {k: [] for k in ("inn", "phone", "email", "moq", "price", "delivery", "docs", "geo")}
 
     def add(field, value, s, m):
         if value and value not in [v for v, _ in f[field]]:
             f[field].append((value, _cut(_win(s, m), 220)))
 
-    for s in sents:
+    for s in sents(text if main is None else re.sub(r"[ \t]+", " ", main)):
+        m = _MOQ.search(s)
+        num = m and _MOQ_VAL.match(s[m.end():])
+        if num:
+            add("moq", num.group(1).strip(), s, m)
+        for m in _PRICE.finditer(s):
+            add("price", re.sub(r"\s+", " ", m.group()), s, m)
+        for m in _DELIVERY.finditer(s):
+            lo, hi = max(0, m.start() - 80), m.end() + 160
+            for label, rx in DELIVERY:
+                fm = rx.search(s, lo, hi)
+                if fm:
+                    add("delivery", label, s, fm)
+            fm = _FREE.search(s, lo, hi)
+            if fm:
+                n = int(re.sub(r"\D", "", fm.group(1))) * (1000 if fm.group(2) else 1)
+                add("delivery", f"бесплатно от {n:,} ₽".replace(",", " "), s, fm)
+        for label, rx in DOCS:
+            m = re.search(rx, s, re.I)
+            if m:
+                add("docs", label, s, m)
+    for s in sents(text):
         for m in _INN.finditer(s):
             if inn_valid(m.group(1)):
                 add("inn", m.group(1), s, m)
@@ -119,19 +156,6 @@ def extract(text: str) -> dict:
             e = m.group().lower()
             if not e.rsplit(".", 1)[-1] in ("png", "jpg", "jpeg", "svg", "webp", "gif"):
                 add("email", e, s, m)
-        m = _MOQ.search(s)
-        if m:
-            num = _MOQ_VAL.match(s[m.end():])
-            add("moq", num.group(1).strip() if num else _cut(s[m.end():], 60), s, m)
-        for m in _PRICE.finditer(s):
-            add("price", re.sub(r"\s+", " ", m.group()), s, m)
-        m = _DELIVERY.search(s)
-        if m:
-            add("delivery", _cut(_win(s, m), 140), s, m)
-        for label, rx in DOCS:
-            m = re.search(rx, s, re.I)
-            if m:
-                add("docs", label, s, m)
         for label, rx in GEO:
             m = re.search(rx, s, re.I)
             if m:
@@ -208,10 +232,18 @@ def score(s: dict, cat: str, city: str):
     else:
         miss.append("доставка в " + city)
 
-    for k, pts, label in (("phone", 5, "телефон"), ("email", 3, "email"), ("price", 5, "цена"),
-                          ("moq", 5, "минимальный заказ"), ("delivery", 5, "условия доставки")):
+    for k, label in (("phone", "телефон"), ("email", "email")):
         if has(k):
-            why.append((pts, label.capitalize() + ": " + vals(k)[0]))
+            why.append((5, label.capitalize() + ": " + vals(k)[0]))
+        else:
+            miss.append(label)
+
+    # условия: баллы только за разобранные значения, цена — только по товару этой категории
+    prices = [p[0] for p in facts.get("price") or [] if price_ok(p[0], p[1], cat)]
+    for pts, label, v in ((4, "цена", prices[:1]), (3, "минимальный заказ", vals("moq")[:1]),
+                          (3, "условия доставки", vals("delivery")[:4])):
+        if v:
+            why.append((pts, label.capitalize() + ": " + ", ".join(v)))
         else:
             miss.append(label)
 
@@ -221,21 +253,49 @@ def score(s: dict, cat: str, city: str):
     else:
         miss.append("ИНН")
     if legal.get("status") == "ACTIVE":
-        why.append((5, "Действующее юрлицо (ЕГРЮЛ)"))
+        why.append((10, "Действующее юрлицо (ЕГРЮЛ)"))
         if (legal.get("years") or 0) >= 3:
             why.append((5, f"На рынке {legal['years']} лет"))
     elif legal.get("status") == "НЕ НАЙДЕН":
         miss.append("ИНН не найден в ЕГРЮЛ")
     elif legal.get("status"):  # LIQUIDATING, LIQUIDATED, BANKRUPT, REORGANIZING
         why.append((-30, "Статус в ЕГРЮЛ: " + legal["status"]))
+    okved = legal.get("okved") or ""  # основной вид деятельности: опт и производство против розницы и общепита
+    if okved.startswith(("46", "10", "11")):
+        why.append((5, f"ОКВЭД {okved}: " + ("оптовая торговля" if okved.startswith("46") else "производство")))
+    elif okved.startswith("47"):
+        why.append((-10, f"ОКВЭД {okved}: розничная торговля"))
+    elif okved.startswith("56"):
+        why.append((-20, f"ОКВЭД {okved}: общепит"))
 
-    if has("docs"):
-        why.append((10, "Документы: " + ", ".join(vals("docs")[:3])))
+    if has("docs"):  # упоминание на сайте, не проверка по реестру
+        why.append((5, "Упоминает документы: " + ", ".join(vals("docs")[:3])))
     else:
         miss.append("документы")
 
     total = max(0, min(100, sum(p for p, _ in why)))
     return total, sorted(why, key=lambda x: -x[0]), miss
+
+
+def price_ok(value: str, quote: str, cat: str) -> bool:
+    """Цена относится к категории: рядом назван её товар, и за кг/л она правдоподобна."""
+    if not _CAT_RE[cat].search(quote or ""):
+        return False
+    num = float(re.sub(r"[^\d.]", "", re.search(r"\d[\d\s]*(?:[.,]\d+)?", value).group().replace(",", ".")))
+    return not (re.search(r"(?:/|за)\s*(?:кг|л)(?![а-яё])", value) and num > MAX_KG)
+
+
+def focus(s: dict, cat: str, city: str) -> dict:
+    """Поставщик глазами категории и города: цены только по её товарам, рейтинг, пробелы."""
+    s["facts"]["price"] = [p for p in s["facts"].get("price") or [] if price_ok(p[0], p[1], cat)]
+    s["score"], s["why"], s["miss"] = score(s, cat, city)
+    s["cat"] = cat
+    return s
+
+
+def better_name(name: str, legal_name: str) -> str:
+    """Домен вместо названия («prod66.ru») заменяем юрназванием из ЕГРЮЛ."""
+    return legal_name if legal_name and re.fullmatch(r"[\w.-]+\.[a-zа-я]{2,}", name or "", re.I) else name
 
 
 # --- хранилище --------------------------------------------------------------------------------------------
@@ -257,7 +317,9 @@ def now() -> str:
     return datetime.now().strftime("%Y-%m-%d %H:%M")
 
 
-def connect(path=ROOT / "data" / "suppliers.sqlite") -> sqlite3.Connection:
+def connect(path=None) -> sqlite3.Connection:
+    # SUPPLIERS_DB — собрать новую базу рядом с рабочей и подменить её после проверки
+    path = path or os.environ.get("SUPPLIERS_DB") or ROOT / "data" / "suppliers.sqlite"
     Path(path).parent.mkdir(exist_ok=True)
     c = sqlite3.connect(path, check_same_thread=False, timeout=30)
     c.row_factory = sqlite3.Row
@@ -350,9 +412,9 @@ def search(c, cat=None, city="Екатеринбург", net=None, q="", only=()
     out = []
     for (sid,) in c.execute(sql, args).fetchall():
         s = load(c, sid)
-        best = max((score(s, x, city) + (x,) for x in cats if any(o["category"] == x for o in s["offers"])),
-                   key=lambda t: t[0])
-        s["score"], s["why"], s["miss"], s["cat"] = best
+        best = max((x for x in cats if any(o["category"] == x for o in s["offers"])),
+                   key=lambda x: score(s, x, city)[0])
+        focus(s, best, city)
         if "price" in only and not s["facts"].get("price"):
             continue
         if "docs" in only and not s["facts"].get("docs"):
@@ -363,3 +425,4 @@ def search(c, cat=None, city="Екатеринбург", net=None, q="", only=()
             continue
         out.append(s)
     return sorted(out, key=lambda s: -s["score"])
+

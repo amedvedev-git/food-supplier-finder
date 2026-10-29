@@ -1,5 +1,5 @@
 """Проверки чистой логики: извлечение фактов из текста и рейтинг. Запуск: python test_core.py"""
-from core import extract, inn_valid, norm_phone, score, categorize, pick_name, host
+from core import extract, inn_valid, norm_phone, score, focus, categorize, pick_name, better_name, host
 
 # Реальное объявление с agroserver (29.10.2026)
 AGRO = ("Предлагаем к оптовой продаже минтай размера 25+ по ГОСТ. Производитель: Крабозаводск / Ясный. "
@@ -55,10 +55,48 @@ def test_extract_long_nav_text_and_moq_tail():
            "Наша логистика обеспечивает быструю доставку и оптимальные условия хранения Бренды Статьи "
            "Получить прайс-лист на рыбу После отправки мы вышлем Вам прайс по указанному номеру")
     f = extract(nav)
-    v, q = f["delivery"][0]
-    assert "быструю доставку" in v and "Богишамол" not in v and len(q) < 230, (v, q)
+    assert f["delivery"] == [], f["delivery"]  # упоминание доставки без условий — не факт
     f = extract("Минимальный заказ (от 1000р) За 1-2 дня до доставки менеджеры согласовывают время")
     assert f["moq"][0][0] == "от 1000р", f["moq"]
+
+
+def test_delivery_is_conditions_not_mention():
+    f = extract(SITE)
+    assert {"по городу", "бесплатно от 15 000 ₽", "по России", "через ТК"} <= {v for v, _ in f["delivery"]}, f["delivery"]
+    assert any("15 000" in q for v, q in f["delivery"] if v == "бесплатно от 15 000 ₽")
+    f = extract("Бесплатная доставка при заказе от 5 тыс. руб., самовывоз со склада")
+    assert {v for v, _ in f["delivery"]} == {"бесплатно от 5 000 ₽", "самовывоз"}, f["delivery"]
+
+
+def test_moq_needs_number_and_unit():
+    assert extract("Минимальная сумма заказа составляет 100.000 рублей.")["moq"][0][0] == "100.000 рублей"
+    assert extract("Минимальная сумма заказа всего от 6500 рублей")["moq"][0][0] == "от 6500 рублей"
+    assert extract("Минимальный заказ? Уточняйте у менеджера")["moq"] == []
+    assert extract("Минимальная сумма заказа и условия доставки уточняйте")["moq"] == []
+
+
+def test_conditions_from_main_content_contacts_from_whole_page():
+    page = "Меню Доставка и оплата Каталог Телефон 8 (343) 222-33-44 Лосось 29 900 руб./кг"
+    main = "Доставка по Екатеринбургу собственным транспортом, на следующий день."
+    f = extract(page + " " + main, main)
+    assert [v for v, _ in f["phone"]] == ["+73432223344"]
+    assert f["price"] == []  # цена из меню и боковых блоков не берётся
+    assert {v for v, _ in f["delivery"]} == {"по городу", "свой транспорт", "на следующий день"}, f["delivery"]
+
+
+def test_price_counts_only_for_category_product():
+    s = {"city": "", "offers": [{"category": "salmon", "source": "yandex"}], "legal": {},
+         "facts": extract("Каракатица целая 1032 руб./кг. Филе лосося охлаждённое 1890 руб./кг. "
+                          "Лосось слабосолёный 29 900 руб./кг.")}
+    focus(s, "salmon", "Екатеринбург")
+    assert [v for v, _ in s["facts"]["price"]] == ["1890 руб./кг"], s["facts"]["price"]
+    assert s["cat"] == "salmon" and "цена" not in s["miss"]
+
+
+def test_better_name():
+    assert better_name("prod66.ru", 'ООО "ОБИЛИЕ"') == 'ООО "ОБИЛИЕ"'
+    assert better_name("Атлант Групп", 'ООО "АТЛАНТ-ФИШ"') == "Атлант Групп"
+    assert better_name("рыба66.рф", "") == "рыба66.рф"
 
 
 def test_extract_ignores_invalid_inn_and_restaurant():
@@ -116,6 +154,23 @@ def test_score_other_network_cities():
            "legal": {}}
     geo = lambda s, city: [p for p, w in score(s, "salmon", city)[1] if "регион" in w]  # noqa: E731
     assert geo(ufa, "Уфа") == [20] and geo(tmn, "Тюмень") == [20] and geo(ufa, "Екатеринбург") == []
+
+
+def test_okved_retail_and_wholesale():
+    def pts(okved):
+        s = {"city": "Екатеринбург", "facts": extract("Продаём рыбу."), "offers": [{"category": "salmon", "source": "yandex"}],
+             "legal": {"status": "ACTIVE", "okved": okved}}
+        return [p for p, w in score(s, "salmon", "Екатеринбург")[1] if "ОКВЭД" in w]
+    assert pts("46.38") == [5] and pts("10.20") == [5] and pts("47.91") == [-10] and pts("56.10") == [-20], \
+        (pts("46.38"), pts("47.91"))
+    assert pts("") == []
+
+
+def test_score_max_is_100():
+    s = {"city": "Екатеринбург", "facts": extract(SITE + " Филе лосося 1890 руб./кг."),
+         "offers": [{"category": "salmon", "source": "productcenter"}],
+         "legal": {"status": "ACTIVE", "years": 12, "okved": "46.38"}}
+    assert score(s, "salmon", "Екатеринбург")[0] == 100, score(s, "salmon", "Екатеринбург")
 
 
 if __name__ == "__main__":

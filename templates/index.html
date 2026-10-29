@@ -88,7 +88,7 @@
     <td class="clip">{{ first(s,'price') or '' }}{% if not first(s,'price') %}<span class="none">по запросу</span>{% endif %}
         {% if s.facts.price_list %}<div><a class="small" href="{{ s.facts.price_list[0][0] }}" target="_blank" rel="noopener">прайс-лист</a></div>{% endif %}</td>
     <td class="clip">{{ first(s,'moq') or '' }}{% if not first(s,'moq') %}<span class="none">—</span>{% endif %}</td>
-    <td class="clip small">{{ first(s,'delivery')|truncate(90) if first(s,'delivery') else '' }}{% if not first(s,'delivery') %}<span class="none">—</span>{% endif %}</td>
+    <td class="clip small">{{ allv(s,'delivery') }}{% if not allv(s,'delivery') %}<span class="none">—</span>{% endif %}</td>
     <td class="small">{% for d in (s.facts.docs or [])[:3] %}<span class="tag good">{{ d[0] }}</span> {% endfor %}{% if not s.facts.docs %}<span class="none">—</span>{% endif %}</td>
     <td class="small">{% if first(s,'phone') %}<a href="tel:{{ first(s,'phone') }}">{{ first(s,'phone')|tel }}</a><br>{% endif %}
         {% if first(s,'email') %}<a href="mailto:{{ first(s,'email') }}">{{ first(s,'email') }}</a><br>{% endif %}

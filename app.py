@@ -46,6 +46,15 @@ def first(s, field):
     return v[0][0] if v else ""
 
 
+def allv(s, field):
+    return ", ".join(dict.fromkeys(v[0] for v in s["facts"].get(field) or []))
+
+
+def focus(s, cats, city):
+    """Рейтинг под первую категорию из списка (выбранную в поиске, если она есть у поставщика)."""
+    return core.focus(s, cats[0], city) if cats else s.update(score=0, why=[], miss=[], cat="") or s
+
+
 def letter(s, p):
     cat = core.CAT.get(s.get("cat") or p["cat"], {}).get("name", "продукция").lower()
     net = f"сеть «{core.NETS[p['net']]}»" if p["net"] in core.NETS else "сеть ресторанов"
@@ -61,7 +70,7 @@ def letter(s, p):
             "mailto": f"mailto:{email}?subject={quote(subj)}&body={quote(body)}" if email else ""}
 
 
-T.env.globals.update(first=first)
+T.env.globals.update(first=first, allv=allv)
 T.env.filters["host"] = core.host
 T.env.filters["tel"] = lambda p: f"{p[:2]} {p[2:5]} {p[5:8]}-{p[8:10]}-{p[10:]}" if p and len(p) == 12 else p
 
@@ -82,8 +91,7 @@ def supplier(request: Request, sid: int):
     if not s:
         return RedirectResponse("/")
     cats = sorted({o["category"] for o in s["offers"]}, key=lambda x: x != p["cat"])
-    s["score"], s["why"], s["miss"] = core.score(s, cats[0], p["city"]) if cats else (0, [], [])
-    s["cat"] = cats[0] if cats else ""
+    focus(s, cats, p["city"])
     return T.TemplateResponse(request, "supplier.html", {"p": p, "s": s, "cats": cats, "letter": letter(s, p)})
 
 
@@ -115,9 +123,7 @@ def compare(request: Request, ids: str = ""):
     for i in [int(x) for x in ids.split(",") if x.isdigit()][:4]:
         s = core.load(c, i)
         if s:
-            cats = sorted({o["category"] for o in s["offers"]}, key=lambda x: x != p["cat"])
-            s["score"], s["why"], s["miss"] = core.score(s, cats[0], p["city"]) if cats else (0, [], [])
-            items.append(s)
+            items.append(focus(s, sorted({o["category"] for o in s["offers"]}, key=lambda x: x != p["cat"]), p["city"]))
     return T.TemplateResponse(request, "compare.html", {"p": p, "items": items})
 
 
@@ -134,10 +140,7 @@ def shortlisted(p):
     for (sid,) in c.execute("select supplier_id from marks where starred=1 or status!='' order by at desc"):
         s = core.load(c, sid)
         if s:
-            cats = sorted({o["category"] for o in s["offers"]})
-            s["score"], s["why"], s["miss"] = core.score(s, cats[0], p["city"]) if cats else (0, [], [])
-            s["cat"] = cats[0] if cats else ""
-            out.append(s)
+            out.append(focus(s, sorted({o["category"] for o in s["offers"]}), p["city"]))
     return out
 
 
@@ -152,7 +155,7 @@ def export(request: Request, what: str = "search"):
                "Телефон", "Email", "Сайт", "ИНН", "Статус ЕГРЮЛ", "Не хватает", "Статус", "Заметка", "Источник"])
     for s in rows:
         ws.append([s["score"], s["name"], core.CAT.get(s.get("cat"), {}).get("name", ""), s["city"] or "",
-                   first(s, "price"), first(s, "moq"), first(s, "delivery"),
+                   first(s, "price"), first(s, "moq"), allv(s, "delivery"),
                    ", ".join(v[0] for v in s["facts"].get("docs", [])), first(s, "phone"), first(s, "email"),
                    s["site"] or "", s["inn"] or first(s, "inn"), s["legal"].get("status", ""), ", ".join(s["miss"]),
                    s["mark"]["status"], s["mark"]["note"], s["offers"][0]["url"] if s["offers"] else ""])
