@@ -1,9 +1,11 @@
 {% extends "base.html" %}
 {% set ctx = 'cat=' ~ p.cat ~ '&city=' ~ (p.city|urlencode) ~ '&net=' ~ p.net %}
+{% set NONE = '<span class="none" title="Нет в открытых источниках — спросим в запросе КП">—</span>' %}
 {% block body %}
-<form class="search card" method="get" action="/">
-  <div class="chips" role="radiogroup" aria-label="Сеть">
-    <input type="radio" name="net" id="n0" value="" {{ 'checked' if not p.net }}><label for="n0">Все категории</label>
+<form class="search card" method="get" action="/" id="search">
+  <div class="chips" role="radiogroup" aria-label="Для сети">
+    <span class="small muted" style="align-self:center">Для сети</span>
+    <input type="radio" name="net" id="n0" value="" {{ 'checked' if not p.net }}><label for="n0">Все сети</label>
     {% for k, v in NETS.items() %}
     <input type="radio" name="net" id="n-{{ k }}" value="{{ k }}" {{ 'checked' if p.net == k }}><label for="n-{{ k }}">{{ v }}</label>
     {% endfor %}
@@ -20,16 +22,16 @@
     <label class="f">Город доставки
       <input name="city" value="{{ p.city }}" list="cities" autocomplete="off">
       <datalist id="cities">{% for c in CITIES %}<option value="{{ c }}">{% endfor %}</datalist>
-      <span class="chips small" id="netcities" style="margin-top:4px"></span>
     </label>
     <label class="f">Уточнение
       <input name="q" value="{{ p.q }}" placeholder="например: форель, моцарелла, крафт">
     </label>
     <button type="submit">Найти</button>
   </div>
+  <div class="row small"><span class="muted">Города сети:</span><span class="chips" id="netcities"></span></div>
   <div class="chips small" aria-label="Фильтры">
-    {% for k, v in [('local','Работает в моём регионе'),('price','Есть цена'),('contacts','Есть контакты'),('docs','Есть документы')] %}
-    <input type="checkbox" name="only" value="{{ k }}" id="o-{{ k }}" {{ 'checked' if k in p.only }}><label for="o-{{ k }}">{{ v }}</label>
+    {% for k, (label, _) in FILTERS.items() %}
+    <input type="checkbox" name="only" value="{{ k }}" id="o-{{ k }}" {{ 'checked' if k in p.only }}><label for="o-{{ k }}">{{ label }}{% if found %} <span class="cnt">{{ counts[k] }}</span>{% endif %}</label>
     {% endfor %}
   </div>
 </form>
@@ -51,9 +53,8 @@
 </div>
 {% else %}
 <div class="stats">
-  <span><b>{{ stats.n }}</b> <span class="muted">поставщиков</span></span>
-  <span><b>{{ stats.local }}</b> <span class="muted">работают в регионе «{{ p.city }}»</span></span>
-  <span><b>{{ stats.price }}</b> <span class="muted">с ценой</span></span>
+  <span><b>{{ rows|length }}</b> <span class="muted">{% if rows|length != found %}из {{ found }} {% endif %}поставщиков · город {{ p.city }}</span></span>
+  <span class="small muted">— нет в открытых источниках, вопрос попадёт в запрос КП</span>
   <div class="actions">
     <button class="ghost" id="cmp" disabled>Сравнить выбранные (<span id="ncmp">0</span>)</button>
     <a class="btn ghost" href="/export.xlsx?{{ request.url.query }}">Скачать XLSX</a>
@@ -61,7 +62,8 @@
     <form method="post" action="/live" style="display:inline">
       <input type="hidden" name="cat" value="{{ p.cat }}"><input type="hidden" name="city" value="{{ p.city }}">
       <input type="hidden" name="q" value="{{ p.q }}"><input type="hidden" name="net" value="{{ p.net }}">
-      <button type="submit" {{ 'disabled' if job.running or not LIVE }} title="{{ 'Ищет новые сайты поставщиков в Яндексе и обходит их (1–3 минуты)' if LIVE else 'Живой поиск выключен: нет ключа Yandex Search API' }}">Найти новых в Яндексе</button>
+      {% if LIVE %}<button type="submit" {{ 'disabled' if job.running }} title="Ищет новые сайты поставщиков в Яндексе и обходит их (1–3 минуты)">{{ 'Идёт поиск…' if job.running else 'Найти новых в Яндексе' }}</button>
+      {% else %}<span class="small muted">Живой поиск выключен: нет ключа Yandex Search API</span>{% endif %}
     </form>
     {% endif %}
   </div>
@@ -77,22 +79,21 @@
     <td><input type="checkbox" class="pick" value="{{ s.id }}" aria-label="Сравнить {{ s.name }}"><br>
         <button class="star {{ 'on' if s.mark.starred }}" data-id="{{ s.id }}" aria-pressed="{{ 'true' if s.mark.starred else 'false' }}" title="В шортлист">★</button></td>
     <td><a class="name" href="/s/{{ s.id }}?{{ ctx }}">{{ s.name }}</a>
-        <div class="small muted">{{ s.city or '' }}{% if s.legal.status == 'ACTIVE' %} · <span class="tag good">ЕГРЮЛ: действует</span>{% elif s.legal.status %} · <span class="tag bad">{{ s.legal.status }}</span>{% endif %}</div>
+        <div class="small muted">{{ s.city or '' }}{% if s.legal.status %}{{ ' · ' if s.city }}{% if s.legal.status == 'ACTIVE' %}<span class="tag good">ЕГРЮЛ: действует</span>{% else %}<span class="tag bad">{{ s.legal.status }}</span>{% endif %}{% endif %}</div>
         <div class="row small" style="gap:4px;margin-top:4px">
-          {% for src in s.offers|map(attribute='source')|unique %}<span class="tag">{{ src }}</span>{% endfor %}
           {% if not p.cat %}<span class="tag acc">{{ CAT[s.cat].name }}</span>{% endif %}
           {% if s.mark.status %}<span class="tag warn">{{ s.mark.status }}</span>{% endif %}
         </div></td>
     <td><div class="score"><b>{{ s.score }}</b><span class="bar"><i style="width:{{ s.score }}%"></i></span></div>
-        <div class="why">{% for pts, w in s.why if not w.startswith(('Найден в Яндексе, категория', 'Есть предложение')) %}{% if loop.index <= 2 %}<span{% if pts < 0 %} style="color:var(--bad)"{% endif %}>{{ w|truncate(60) }}</span>{{ '; ' if loop.index < 2 and not loop.last }}{% endif %}{% endfor %}</div></td>
-    <td class="clip">{{ first(s,'price') or '' }}{% if not first(s,'price') %}<span class="none">по запросу</span>{% endif %}
+        <div class="why" title="{{ s.why|map(attribute=1)|join('; ') }}">{% for pts, w in s.why if not w.startswith(('Найден в Яндексе, категория', 'Есть предложение')) %}{% if loop.index <= 2 %}<span{% if pts < 0 %} style="color:var(--bad)"{% endif %}>{{ w }}</span>{{ '; ' if loop.index < 2 and not loop.last }}{% endif %}{% endfor %}</div></td>
+    <td class="clip">{{ first(s,'price') or '' }}{% if not first(s,'price') %}{{ NONE|safe }}{% endif %}
         {% if s.facts.price_list %}<div><a class="small" href="{{ s.facts.price_list[0][0] }}" target="_blank" rel="noopener">прайс-лист</a></div>{% endif %}</td>
-    <td class="clip">{{ first(s,'moq') or '' }}{% if not first(s,'moq') %}<span class="none">—</span>{% endif %}</td>
-    <td class="clip small">{{ allv(s,'delivery') }}{% if not allv(s,'delivery') %}<span class="none">—</span>{% endif %}</td>
-    <td class="small">{% for d in (s.facts.docs or [])[:3] %}<span class="tag good">{{ d[0] }}</span> {% endfor %}{% if not s.facts.docs %}<span class="none">—</span>{% endif %}</td>
-    <td class="small">{% if first(s,'phone') %}<a href="tel:{{ first(s,'phone') }}">{{ first(s,'phone')|tel }}</a><br>{% endif %}
-        {% if first(s,'email') %}<a href="mailto:{{ first(s,'email') }}">{{ first(s,'email') }}</a><br>{% endif %}
-        {% if s.site %}<a href="{{ s.site }}" target="_blank" rel="noopener">{{ s.site|host|truncate(28) }}</a>{% endif %}</td>
+    <td class="clip">{{ first(s,'moq') or '' }}{% if not first(s,'moq') %}{{ NONE|safe }}{% endif %}</td>
+    <td class="clip small">{{ allv(s,'delivery')|truncate(120) }}{% if not allv(s,'delivery') %}{{ NONE|safe }}{% endif %}</td>
+    <td class="small">{% for d in (s.facts.docs or [])[:3] %}<span class="tag good">{{ d[0] }}</span> {% endfor %}{% if not s.facts.docs %}{{ NONE|safe }}{% endif %}</td>
+    <td class="small contacts">{% if first(s,'phone') %}<a href="tel:{{ first(s,'phone') }}">{{ first(s,'phone')|tel }}</a>{% endif %}
+        {% if first(s,'email') %}<a href="mailto:{{ first(s,'email') }}" title="{{ first(s,'email') }}">{{ first(s,'email') }}</a>{% endif %}
+        {% if s.site %}<a href="{{ s.site }}" target="_blank" rel="noopener">{{ s.site|host }}</a>{% endif %}</td>
   </tr>
   {% endfor %}
   </tbody>
@@ -122,12 +123,16 @@ function netCities() {  // быстрый выбор: города, где ра�
     const b = document.createElement('button');
     b.type = 'button'; b.className = 'tag' + (city.value === c ? ' acc' : ''); b.textContent = c;
     b.style.cssText = 'border:0;cursor:pointer;margin-right:4px';
-    b.onclick = () => { city.value = c; netCities(); };
+    b.onclick = () => { city.value = c; form.requestSubmit(); };
     box.appendChild(b);
   }
 }
 document.querySelectorAll('input[name=net]').forEach(r => r.addEventListener('change', () => { filterCats(); netCities(); }));
 filterCats(); netCities();
+const form = document.getElementById('search');  // фильтры применяются сразу, «Найти» — для текста уточнения
+form.addEventListener('change', e => {
+  if (e.target.matches('input[name=net], input[name=only], select[name=cat], input[name=city]')) form.requestSubmit();
+});
 const picks = () => [...document.querySelectorAll('.pick:checked')].map(x => x.value);
 const cmp = document.getElementById('cmp');
 document.addEventListener('change', e => {

@@ -415,14 +415,15 @@ def search(c, cat=None, city="Екатеринбург", net=None, q="", only=()
         best = max((x for x in cats if any(o["category"] == x for o in s["offers"])),
                    key=lambda x: score(s, x, city)[0])
         focus(s, best, city)
-        if "price" in only and not s["facts"].get("price"):
-            continue
-        if "docs" in only and not s["facts"].get("docs"):
-            continue
-        if "contacts" in only and not (s["facts"].get("phone") or s["facts"].get("email")):
-            continue
-        if "local" in only and not any(p > 0 and t.startswith("Работает в регионе") for p, t in s["why"]):
-            continue
-        out.append(s)
+        if all(FILTERS[k][1](s) for k in only if k in FILTERS):
+            out.append(s)
     return sorted(out, key=lambda s: -s["score"])
+
+
+FILTERS = {  # фильтры выдачи: подпись и условие (после focus)
+    "local": ("Работает в моём регионе", lambda s: any(p > 0 and t.startswith("Работает в регионе") for p, t in s["why"])),
+    "price": ("Есть цена", lambda s: bool(s["facts"].get("price"))),
+    "contacts": ("Есть контакты", lambda s: bool(s["facts"].get("phone") or s["facts"].get("email"))),
+    "docs": ("Упоминает документы", lambda s: bool(s["facts"].get("docs"))),
+}
 

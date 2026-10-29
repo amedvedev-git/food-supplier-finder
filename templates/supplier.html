@@ -34,10 +34,11 @@
         {% for f in ['price','moq','delivery','docs','geo','phone','email','inn','price_list'] %}
         <dt>{{ LABELS[f] }}</dt>
         <dd>{% if s.facts[f] %}
-          {% for v in s.facts[f][:4] %}
+          {% for v in s.facts[f][:6] %}
             <div>{% if f == 'price_list' %}<a href="{{ v[0] }}" target="_blank" rel="noopener">{{ v[1] or 'прайс-лист' }}</a>{% elif f == 'phone' %}<a href="tel:{{ v[0] }}">{{ v[0]|tel }}</a>{% elif f == 'email' %}<a href="mailto:{{ v[0] }}">{{ v[0] }}</a>{% else %}{{ v[0] }}{% endif %}
-            {% if v[1] and f != 'price_list' and v[1] != v[0] %}<div class="q">«{{ v[1] }}»</div>{% endif %}
-            <div class="small muted"><a href="{{ v[2] }}" target="_blank" rel="noopener">{{ v[3] }}</a> · {{ v[4] }}</div></div>
+            <details class="src"><summary>источник: {{ v[3] }} · {{ v[4] }}</summary>
+              {% if v[1] and f != 'price_list' and v[1] != v[0] %}<div class="q">«{{ v[1] }}»</div>{% endif %}
+              <a class="small" href="{{ v[2] }}" target="_blank" rel="noopener">{{ v[2]|host }} ↗</a></details></div>
           {% endfor %}
         {% else %}<span class="none">не найдено</span>{% endif %}</dd>
         {% endfor %}

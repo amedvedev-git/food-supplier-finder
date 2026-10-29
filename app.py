@@ -24,7 +24,7 @@ ASK = {"цена": "актуальный прайс-лист и цены для 
 JOB = {"running": False, "log": [], "title": "", "day": "", "count": 0}
 LIVE_LIMIT = int(os.environ.get("LIVE_LIMIT", "30"))
 T.env.globals.update(CATS=core.CATEGORIES, CAT=core.CAT, NETS=core.NETS, LABELS=LABELS, STATUSES=STATUSES,
-                     CITIES=list(collect.REGION), NET_CITIES=core.NET_CITIES, LIVE=bool(os.environ.get("YANDEX_API_KEY")))
+                     CITIES=list(collect.REGION), NET_CITIES=core.NET_CITIES, FILTERS=core.FILTERS, LIVE=bool(os.environ.get("YANDEX_API_KEY")))
 
 
 def db():
@@ -78,10 +78,11 @@ T.env.filters["tel"] = lambda p: f"{p[:2]} {p[2:5]} {p[5:8]}-{p[8:10]}-{p[10:]}"
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request):
     p = params(request)
-    rows = run_search(p) if (p["cat"] or p["q"] or p["net"]) else []
-    stats = {"n": len(rows), "price": sum(bool(r["facts"].get("price")) for r in rows),
-             "local": sum(any(t.startswith("Работает в регионе") for _, t in r["why"]) for r in rows)}
-    return T.TemplateResponse(request, "index.html", {"p": p, "rows": rows, "stats": stats, "job": JOB})
+    found = run_search({**p, "only": []}) if (p["cat"] or p["q"] or p["net"]) else []
+    rows = [s for s in found if all(core.FILTERS[k][1](s) for k in p["only"] if k in core.FILTERS)]
+    counts = {k: sum(f(s) for s in found) for k, (_, f) in core.FILTERS.items()}  # счётчики на чипах фильтров
+    return T.TemplateResponse(request, "index.html", {"p": p, "rows": rows, "found": len(found), "counts": counts,
+                                                      "job": JOB})
 
 
 @app.get("/s/{sid}", response_class=HTMLResponse)
