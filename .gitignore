@@ -15,3 +15,5 @@ docs/CHECK-*
 prototypes/
 .impeccable/
 deck/
+# бриф дизайн-инструмента (impeccable) — рабочий файл, не для репозитория
+PRODUCT.md
