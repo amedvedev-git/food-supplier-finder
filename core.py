@@ -230,6 +230,26 @@ def price_list(rows, limit=5) -> dict:
     return {"price": out}
 
 
+# сверка с реестром деклараций Росаккредитации: в открытых данных нет ИНН — только название и адрес изготовителя
+_OPF = re.compile(r"(?<![а-яa-z])(?:общество с ограниченной ответственностью|акционерное общество|публичное|закрытое|"
+                  r"открытое|индивидуальный предприниматель|ооо|оао|зао|пао|ао|нао|ип|кфх|глава)(?![а-яa-z])")
+
+
+def org_key(name: str) -> str:
+    """Название юрлица без формы собственности и кавычек: «ООО "Обилие"» и «ОБЩЕСТВО ... "ОБИЛИЕ"» → «обилие»."""
+    s = _OPF.sub(" ", (name or "").lower().replace("ё", "е"))
+    return " ".join(re.sub(r"[^\w]+", " ", s).split())
+
+
+def region_keys(address: str) -> set:
+    """Город и регион из адреса ЕГРЮЛ — первые 7 букв («краснод» ≠ «краснояр»): «г Уфа» → уфа, «Свердловская обл» →
+    свердло."""
+    a = (address or "").lower().replace("ё", "е")
+    words = re.findall(r"(?:^|[\s,])г\.?\s+([а-я-]{3,})", a) + \
+        re.findall(r"([а-я-]{4,})\s+(?:обл|область|край|респ)", a) + re.findall(r"(?:республика|респ\.?)\s+([а-я-]{4,})", a)
+    return {w[:7] for w in words}
+
+
 def categorize(text: str) -> list:
     return [cid for cid, rx in _CAT_RE.items() if rx.search(text)]
 
@@ -333,7 +353,9 @@ def score(s: dict, cat: str, city: str):
     elif okved.startswith("56"):
         why.append((-20, f"ОКВЭД {okved}: общепит"))
 
-    if has("docs"):  # упоминание на сайте, не проверка по реестру
+    if has("decl"):  # декларации в реестре Росаккредитации по ИНН — проверено, а не только написано на сайте
+        why.append((5, f"Декларации в реестре Росаккредитации: {len(vals('decl'))}"))
+    elif has("docs"):  # упоминание на сайте, не проверка по реестру
         why.append((5, "Упоминает документы: " + ", ".join(vals("docs")[:3])))
     else:
         miss.append("документы")
@@ -495,6 +517,6 @@ FILTERS = {  # фильтры выдачи: подпись и условие (п
     "local": ("Локальные", lambda s: any(p > 0 and t.startswith("Работает в регионе") for p, t in s["why"])),
     "price": ("Есть цена", lambda s: bool(s["facts"].get("price"))),
     "contacts": ("Есть контакты", lambda s: bool(s["facts"].get("phone") or s["facts"].get("email"))),
-    "docs": ("Есть документы", lambda s: bool(s["facts"].get("docs"))),
+    "docs": ("Есть документы", lambda s: bool(s["facts"].get("docs") or s["facts"].get("decl"))),
 }
 

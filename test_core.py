@@ -1,5 +1,5 @@
 """Проверки чистой логики: извлечение фактов из текста и рейтинг. Запуск: python test_core.py"""
-from core import extract, inn_valid, norm_phone, score, focus, categorize, pick_name, better_name, host, price_list, price_ok, price_counts
+from core import extract, inn_valid, norm_phone, score, focus, categorize, pick_name, better_name, host, price_list, price_ok, price_counts, org_key, region_keys
 
 # Реальное объявление с agroserver (29.10.2026)
 AGRO = ("Предлагаем к оптовой продаже минтай размера 25+ по ГОСТ. Производитель: Крабозаводск / Ясный. "
@@ -192,6 +192,14 @@ def test_kp_price_counts():
     kp = ("1 250 ₽/кг", "Из ответа поставщика на запрос КП, внёс закупщик", "", "КП", "2026-10-29")
     site = ("1 250 ₽/кг", "Доставка по городу. Цена 1 250 ₽/кг", "https://x.ru", "сайт", "2026-10-29")
     assert price_counts(kp, "salmon") and not price_counts(site, "salmon")
+
+
+def test_fsa_matching_keys():
+    # реестр Росаккредитации без ИНН: сверка по названию без формы собственности и по региону адреса
+    assert org_key('ООО "ОБИЛИЕ"') == org_key("ОБЩЕСТВО С ОГРАНИЧЕННОЙ ОТВЕТСТВЕННОСТЬЮ «Обилие»") == "обилие"
+    assert org_key("ИП Ширяева Наталия Александровна") == "ширяева наталия александровна"
+    assert region_keys("Республика Башкортостан, г. Уфа, Нагаевский") == {"башкорт", "уфа"}
+    assert region_keys("Краснодарский край, Славянский р-н") != region_keys("Красноярский край, г Ачинск")
 
 
 def test_score_max_is_100():

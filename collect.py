@@ -14,6 +14,7 @@ import io
 import json
 import os
 import re
+import subprocess
 import threading
 import time
 import xml.etree.ElementTree as ET
@@ -348,6 +349,57 @@ def enrich_sites(c, log, only_ids=None, again=False):
     c.commit()
 
 
+# --- Росаккредитация --------------------------------------------------------------------------------------
+
+FSA_URL = "https://pub.fsa.gov.ru/rds/declaration/view/{}/common"
+_MAKER = re.compile(r'"manufacturerName":\s*"((?:[^"\\]|\\.)*)"')
+
+
+def fsa(c, path, log):
+    """Действующие декларации о соответствии из открытых данных Росаккредитации (fsa.gov.ru/opendata, rds-full.7z,
+    ~15 ГБ JSONL). В наборе нет ИНН: сверяем название изготовителя с юрназванием из ЕГРЮЛ и регион адреса.
+    Импортёров и дистрибьюторов так не найти — только производителей. Архив распаковывается потоком."""
+    names = {}
+    for sid, legal in c.execute("select id, legal from suppliers where legal like '%\"name\"%'"):
+        d = json.loads(legal)
+        key, region = core.org_key(d.get("name")), core.region_keys(d.get("address"))
+        if len(key) >= 4 and region:  # без региона совпадение по одному названию слишком ненадёжно
+            names.setdefault(key, []).append((sid, region))
+    log(f"fsa: ищем декларации {sum(map(len, names.values()))} поставщиков с юрназванием и адресом")
+    today, found, n = core.now()[:10], {}, 0
+    raw = str(path).endswith(".jsonl")  # распакованный файл (или выборка для проверки) — без 7z
+    proc = None if raw else subprocess.Popen(["7z", "x", "-so", str(path)], stdout=subprocess.PIPE,
+                                             stderr=subprocess.DEVNULL)
+    lines = open(path, encoding="utf-8", errors="replace") if raw else \
+        io.TextIOWrapper(proc.stdout, encoding="utf-8", errors="replace")
+    for n, line in enumerate(lines, 1):
+        m = _MAKER.search(line)
+        hits = m and names.get(core.org_key(m.group(1)))
+        if hits:
+            d = json.loads(line)
+            if d.get("idStatus") != 1 or (d.get("endDate") or "9999") < today:
+                continue
+            addr = (d.get("manufacturerAddress") or "").lower().replace("ё", "е")
+            for sid, region in hits:
+                if any(r in addr for r in region):
+                    found.setdefault(sid, []).append(d)
+        if n % 2_000_000 == 0:
+            log(f"fsa: {n // 1_000_000} млн записей, найдены декларации у {len(found)} поставщиков")
+    if proc and proc.wait() != 0:
+        raise RuntimeError(f"7z завершился с ошибкой {proc.returncode}")
+    c.execute("delete from facts where field='decl'")  # снимок реестра целиком: истёкшие уходят
+    for sid, ds in found.items():
+        for d in sorted(ds, key=lambda d: d.get("regDate") or "", reverse=True)[:5]:
+            prod = next((p.get("productName") for p in d.get("products") or [] if p.get("productName")), "")
+            value = f"{d['numberDoc']} — {core._cut(prod or d.get('techRegs') or '', 90)}"
+            quote = (f"Действует до {d.get('endDate') or 'бессрочно'}, зарегистрирована {d.get('regDate')}. "
+                     f"{core._cut(d.get('techRegs') or '', 120)}. Изготовитель: {d.get('manufacturerName')}, "
+                     f"{core._cut(d.get('manufacturerAddress') or '', 90)}")
+            core.add_facts(c, sid, {"decl": [(value, quote)]}, FSA_URL.format(d["id"]), "Росаккредитация")
+    c.commit()
+    log(f"fsa: просмотрено записей {n}, действующие декларации у {len(found)} поставщиков")
+
+
 # --- DaData -----------------------------------------------------------------------------------------------
 
 def dadata(c, log):
@@ -425,11 +477,12 @@ def live(cat, city, extra, log):
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["seed", "rebuild", "web", "catalogs", "sites", "dadata"])
+    ap.add_argument("cmd", choices=["seed", "rebuild", "web", "catalogs", "sites", "dadata", "fsa"])
     ap.add_argument("--cats", default=",".join(core.CAT))
     ap.add_argument("--city", default="Екатеринбург")
     ap.add_argument("--pages", type=int, default=3)
     ap.add_argument("--again", action="store_true", help="sites: обойти заново и уже обойдённые сайты")
+    ap.add_argument("--file", default=str(core.ROOT / "data" / "fsa" / "rds.7z"), help="fsa: архив rds-full.7z")
     a = ap.parse_args()
     cats = a.cats.split(",")
     log = lambda m: print(time.strftime("%H:%M:%S"), m, flush=True)  # noqa: E731
@@ -446,5 +499,7 @@ if __name__ == "__main__":
         catalogs(c, cats, a.pages, log)
     elif a.cmd == "sites":
         enrich_sites(core.connect(), log, again=a.again)
+    elif a.cmd == "fsa":
+        fsa(core.connect(), a.file, log)
     else:
         dadata(core.connect(), log)

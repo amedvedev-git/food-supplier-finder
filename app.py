@@ -25,8 +25,8 @@ async def lifespan(_):
 
 app = FastAPI(title="Поиск поставщиков", lifespan=lifespan)
 T = Jinja2Templates(directory=str(core.ROOT / "templates"))
-LABELS = {"price": "Цена", "moq": "Мин. заказ", "delivery": "Доставка", "docs": "Документы", "geo": "География",
-          "phone": "Телефон", "email": "Email", "inn": "ИНН", "price_list": "Прайс-лист", "wholesale": "Опт / HoReCa"}
+LABELS = {"price": "Цена", "moq": "Мин. заказ", "delivery": "Доставка", "docs": "Документы", "decl": "Декларации",
+          "geo": "География", "phone": "Телефон", "email": "Email", "inn": "ИНН", "price_list": "Прайс-лист", "wholesale": "Опт / HoReCa"}
 STATUSES = ["", "Написали", "КП получено", "Договариваемся", "Отказ"]
 ASK = {"цена": "актуальный прайс-лист и цены для HoReCa", "минимальный заказ": "минимальный объём заказа",
        "условия доставки": "условия и график доставки", "документы":
@@ -98,7 +98,9 @@ LEGAL_RU = {"ACTIVE": "действует", "LIQUIDATED": "ликвидиров�
 
 
 def has(s, k):
-    return s["legal"].get("status") == "ACTIVE" if k == "egrul" else bool(s["facts"].get(k))
+    if k == "egrul":
+        return s["legal"].get("status") == "ACTIVE"
+    return bool(s["facts"].get(k) or (k == "docs" and s["facts"].get("decl")))  # огонёк «Документы» — и реестр
 
 
 def zone(s):

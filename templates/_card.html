@@ -1,5 +1,5 @@
 {% from "_icons.html" import icon %}
-{% set SRC = {'yandex': 'выдача Яндекса', 'сайт': 'сайт поставщика', 'прайс': 'прайс-лист поставщика', 'productcenter': 'каталог productcenter.ru', 'КП': 'ответ на КП, внёс закупщик'} %}
+{% set SRC = {'yandex': 'выдача Яндекса', 'сайт': 'сайт поставщика', 'прайс': 'прайс-лист поставщика', 'productcenter': 'каталог productcenter.ru', 'КП': 'ответ на КП, внёс закупщик', 'Росаккредитация': 'реестр деклараций Росаккредитации'} %}
 {% set reload = '/s/' ~ s.id ~ '/panel?cat=' ~ s.cat ~ '&city=' ~ (p.city|urlencode) ~ '&net=' ~ p.net %}
 {% macro facts(k, limit=4) -%}
 {% set arr = (s.facts[k] or [])[:limit] %}
@@ -22,7 +22,8 @@
     <h3>Минимальный заказ</h3>{{ facts('moq') }}
     <h3>Цена</h3>{{ facts('price') }}
     {% if s.facts.price_list %}<h3>Прайс-лист</h3>{{ facts('price_list', 2) }}{% endif %}
-    <h3>Документы</h3>{{ facts('docs') }}
+    {% if s.facts.decl %}<h3>Декларации — реестр Росаккредитации</h3>{{ facts('decl', 5) }}{% endif %}
+    <h3>{{ 'Документы, упомянутые на сайте' if s.facts.decl else 'Документы' }}</h3>{{ facts('docs') }}
     <h3>Контакты</h3>{{ facts('phone', 2) }}{{ facts('email', 2) }}
     {% if s.site %}<div class="fact"><a href="{{ s.site }}" target="_blank" rel="noopener">{{ s.site|host }}{{ icon('external', 'sm') }}</a></div>{% endif %}
   </section>

@@ -2,7 +2,7 @@
 {% from "_icons.html" import icon %}
 {% set ctx = 'cat=' ~ p.cat ~ '&city=' ~ (p.city|urlencode) ~ '&net=' ~ p.net %}
 {% set NONE = '<span class="gap">Условия доставки не нашли</span>' %}
-{% set HINTS = {'local': 'Склад или офис в городе или области', 'price': 'Цена товара категории — на сайте или в прайс-листе', 'contacts': 'Найден телефон или email', 'docs': 'На сайте названы декларации, ветдокументы (Меркурий), ХАССП, ГОСТ — без проверки по реестру'} %}
+{% set HINTS = {'local': 'Склад или офис в городе или области', 'price': 'Цена товара категории — на сайте или в прайс-листе', 'contacts': 'Найден телефон или email', 'docs': 'Действующие декларации в реестре Росаккредитации или упоминание деклараций, ветдокументов, ХАССП на сайте'} %}
 {% block head %}
 <style>
 .summary{display:flex;align-items:flex-end;gap:20px 40px;flex-wrap:wrap;padding:40px 0 20px}
