@@ -24,7 +24,7 @@ ASK = {"цена": "актуальный прайс-лист и цены для 
 JOB = {"running": False, "log": [], "title": "", "day": "", "count": 0}
 LIVE_LIMIT = int(os.environ.get("LIVE_LIMIT", "30"))
 T.env.globals.update(CATS=core.CATEGORIES, CAT=core.CAT, NETS=core.NETS, LABELS=LABELS, STATUSES=STATUSES,
-                     CITIES=list(collect.REGION), LIVE=bool(os.environ.get("YANDEX_API_KEY")))
+                     CITIES=list(collect.REGION), NET_CITIES=core.NET_CITIES, LIVE=bool(os.environ.get("YANDEX_API_KEY")))
 
 
 def db():

@@ -20,6 +20,7 @@
     <label class="f">Город доставки
       <input name="city" value="{{ p.city }}" list="cities" autocomplete="off">
       <datalist id="cities">{% for c in CITIES %}<option value="{{ c }}">{% endfor %}</datalist>
+      <span class="chips small" id="netcities" style="margin-top:4px"></span>
     </label>
     <label class="f">Уточнение
       <input name="q" value="{{ p.q }}" placeholder="например: форель, моцарелла, крафт">
@@ -112,8 +113,21 @@ function filterCats() {
   for (const o of sel.options) if (o.value) o.hidden = !!n && !o.dataset.nets.split(' ').includes(n);
   if (sel.selectedOptions[0] && sel.selectedOptions[0].hidden) sel.value = '';
 }
-document.querySelectorAll('input[name=net]').forEach(r => r.addEventListener('change', filterCats));
-filterCats();
+const NC = {{ NET_CITIES|tojson }};
+function netCities() {  // быстрый выбор: города, где работает выбранная сеть
+  const n = net(), list = n ? NC[n] : [...new Set(Object.values(NC).flat())];
+  const box = document.getElementById('netcities'), city = document.querySelector('input[name=city]');
+  box.innerHTML = '';
+  for (const c of list) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'tag' + (city.value === c ? ' acc' : ''); b.textContent = c;
+    b.style.cssText = 'border:0;cursor:pointer;margin-right:4px';
+    b.onclick = () => { city.value = c; netCities(); };
+    box.appendChild(b);
+  }
+}
+document.querySelectorAll('input[name=net]').forEach(r => r.addEventListener('change', () => { filterCats(); netCities(); }));
+filterCats(); netCities();
 const picks = () => [...document.querySelectorAll('.pick:checked')].map(x => x.value);
 const cmp = document.getElementById('cmp');
 document.addEventListener('change', e => {

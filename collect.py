@@ -27,8 +27,8 @@ import core
 UA = "Mozilla/5.0 (compatible; SupplierFinder/0.1; +https://suppliers.alexmedvedev.com/about)"
 HTTP = httpx.Client(headers={"User-Agent": UA, "Accept-Language": "ru"}, timeout=15, follow_redirects=True)
 DELAY = {"productcenter.ru": 3}
-REGION = {"Екатеринбург": "54", "Москва": "213", "Санкт-Петербург": "2", "Челябинск": "56", "Тюмень": "55",
-          "Пермь": "50", "Новосибирск": "65", "Казань": "43", "Нижний Новгород": "47", "Самара": "51"}
+REGION = {"Екатеринбург": "54", "Тюмень": "55", "Челябинск": "56", "Уфа": "172", "Москва": "213",
+          "Санкт-Петербург": "2", "Пермь": "50", "Новосибирск": "65", "Казань": "43", "Нижний Новгород": "47", "Самара": "51"}
 # не поставщики: маркетплейсы, справочники, соцсети, отзывы, сами каталоги
 SKIP = re.compile(r"(avito|ozon|wildberries|yandex|ya\.ru|2gis|pulscen|agroserver|productcenter|tiu\.ru|satom|"
                   r"flagma|deal\.by|hh\.ru|vk\.com|ok\.ru|t\.me|youtube|wikipedia|irecommend|otzovik|restoclub|"

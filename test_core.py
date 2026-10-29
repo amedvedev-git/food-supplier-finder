@@ -109,6 +109,15 @@ def test_score_city_list_is_not_local():
     assert geo(fed) == [10] and geo(loc) == [20], (geo(fed), geo(loc))
 
 
+def test_score_other_network_cities():
+    ufa = {"city": "", "facts": extract("Склад в Уфе, доставка по Республике Башкортостан."),
+           "offers": [{"category": "salmon", "source": "yandex"}], "legal": {}}
+    tmn = {"city": "Тюмень", "facts": extract("Продаём рыбу."), "offers": [{"category": "salmon", "source": "yandex"}],
+           "legal": {}}
+    geo = lambda s, city: [p for p, w in score(s, "salmon", city)[1] if "регион" in w]  # noqa: E731
+    assert geo(ufa, "Уфа") == [20] and geo(tmn, "Тюмень") == [20] and geo(ufa, "Екатеринбург") == []
+
+
 if __name__ == "__main__":
     import sys
     fails = 0
