@@ -1,8 +1,22 @@
 {% extends "base.html" %}
 {% block title %}Как это работает{% endblock %}
+{% block head %}
+<style>
+.about{margin-top:28px}
+.about p{margin:0 0 12px}.about p:last-child{margin-bottom:0}
+.about h2{margin-bottom:14px}
+.about ol{margin:0;padding-left:20px}.about ol li{margin-bottom:8px}
+.about td{padding:8px 10px 8px 0;border-bottom:1px dashed var(--g200)}
+.about .big{font:300 56px/1 Onest,sans-serif;letter-spacing:-.04em;margin:0 0 6px}
+ul.plain{list-style:none;padding:0;margin:12px 0 0}ul.plain li{padding:4px 0}
+</style>
+{% endblock %}
+{% block band %}
+<div class="wrap band"><h1>Как это работает</h1>
+  <p class="lead">Откуда берутся поставщики, как собираются факты и из чего складывается рейтинг.</p></div>
+{% endblock %}
 {% block body %}
-<h1>Как это работает</h1>
-<div class="grid two">
+<div class="grid two about">
   <div class="grid">
     <div class="card">
       <h2>Для кого и зачем</h2>
@@ -36,7 +50,7 @@
   <div class="grid" style="align-content:start">
     <div class="card">
       <h2>Сейчас в базе</h2>
-      <p class="big" style="font-size:32px">{{ n.suppliers }}</p><p class="muted" style="margin-top:2px">поставщиков · {{ n.offers }} предложений · {{ n.facts }} фактов с источниками</p>
+      <p class="big">{{ n.suppliers }}</p><p class="muted" style="margin-top:2px">поставщиков · {{ n.offers }} предложений · {{ n.facts }} фактов с источниками</p>
       <ul class="plain small">{% for src, k in n.src %}<li><span class="tag">{{ src }}</span> {{ k }} поставщиков</li>{% endfor %}</ul>
     </div>
     <div class="card">

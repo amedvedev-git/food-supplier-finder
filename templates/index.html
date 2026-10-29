@@ -1,114 +1,147 @@
 {% extends "base.html" %}
+{% from "_icons.html" import icon %}
 {% set ctx = 'cat=' ~ p.cat ~ '&city=' ~ (p.city|urlencode) ~ '&net=' ~ p.net %}
-{% set NONE = '<span class="none" title="Нет в открытых источниках — спросим в запросе КП">—</span>' %}
-{% block body %}
-<form class="search card" method="get" action="/" id="search">
-  <div class="chips" role="radiogroup" aria-label="Для сети">
-    <span class="small muted" style="align-self:center">Для сети</span>
-    <input type="radio" name="net" id="n0" value="" {{ 'checked' if not p.net }}><label for="n0">Все сети</label>
-    {% for k, v in NETS.items() %}
-    <input type="radio" name="net" id="n-{{ k }}" value="{{ k }}" {{ 'checked' if p.net == k }}><label for="n-{{ k }}">{{ v }}</label>
-    {% endfor %}
-  </div>
-  <div class="fields">
-    <label class="f">Категория
-      <select name="cat" id="cat">
-        <option value="">— все категории сети —</option>
-        {% for c in CATS %}
-        <option value="{{ c.id }}" data-nets="{{ c.nets|join(' ') }}" {{ 'selected' if p.cat == c.id }}>{{ c.name }}{% if c.nets|length > 1 %} · обе сети{% endif %}</option>
-        {% endfor %}
-      </select>
-    </label>
-    <label class="f">Город доставки
-      <input name="city" value="{{ p.city }}" list="cities" autocomplete="off">
-      <datalist id="cities">{% for c in CITIES %}<option value="{{ c }}">{% endfor %}</datalist>
-    </label>
-    <label class="f">Уточнение
-      <input name="q" value="{{ p.q }}" placeholder="например: форель, моцарелла, крафт">
-    </label>
-    <button type="submit">Найти</button>
-  </div>
-  <div class="row small"><span class="muted">Города сети:</span><span class="chips" id="netcities"></span></div>
-  <div class="chips small" aria-label="Фильтры">
-    {% for k, (label, _) in FILTERS.items() %}
-    <input type="checkbox" name="only" value="{{ k }}" id="o-{{ k }}" {{ 'checked' if k in p.only }}><label for="o-{{ k }}">{{ label }}{% if found %} <span class="cnt">{{ counts[k] }}</span>{% endif %}</label>
-    {% endfor %}
-  </div>
-</form>
+{% set NONE = '<span class="gap">Условия доставки не нашли</span>' %}
+{% block head %}
+<style>
+.summary{display:flex;align-items:flex-end;gap:20px 40px;flex-wrap:wrap;padding:40px 0 20px}
+.count-h{display:flex;align-items:baseline;gap:14px;font-size:22px;line-height:1.2;letter-spacing:-.01em}
+.count-h .count{font-size:64px;line-height:.9;letter-spacing:-.04em}
+.count-h small{display:block;color:var(--g500);font-size:15px;margin-top:6px;letter-spacing:0}
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto}
+.filters input{position:absolute;opacity:0;pointer-events:none}
+.filters input:focus-visible+.chip{outline:2px solid var(--teal);outline-offset:2px}
+.toolbar{display:flex;align-items:center;gap:18px;flex-wrap:wrap;padding:0 0 14px;font-size:13px;color:var(--g600)}
+.toolbar .lg{display:inline-flex;align-items:center;gap:8px}
+.toolbar .acts{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+.toolbar form{display:contents}
+.ledger{background:var(--white);border:1px solid var(--g200);border-radius:14px;overflow:clip}
+.row{display:grid;grid-template-columns:28px 64px minmax(230px,1.5fr) 184px minmax(220px,1.3fr) minmax(180px,1fr) 32px;gap:20px;align-items:center;padding:16px 20px;border-top:1px solid var(--g200)}
+.lhead{border-top:0;padding-top:12px;padding-bottom:12px;font-size:12px;color:var(--g500);background:var(--g50);position:sticky;top:0;z-index:2}
+.item{cursor:pointer}.item:hover{background:var(--g50)}.item.open{background:var(--g100)}
+.row input[type=checkbox]{width:18px;height:18px;accent-color:var(--ink);margin:0;cursor:pointer}
+.name{font-weight:600;font-size:16px;line-height:1.3;text-decoration:none}
+.name .ic{color:var(--teal);fill:var(--cyan);margin-right:4px}
+.meta{font-size:13px;color:var(--g500);margin-top:4px;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.cov-cap{font-size:12px;color:var(--g500);margin-top:6px}
+.cond{font-size:14px;line-height:1.4}.cond .sub{font-size:13px;color:var(--g600);margin-top:4px}
+.contact{font-size:14px;min-width:0}
+.contact a{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-decoration:none}.contact a:hover{text-decoration:underline}
+.contact .host{color:var(--g500);font-size:13px}
+.chev{color:var(--g500);transition:transform .2s cubic-bezier(.2,.8,.2,1)}.open .chev{transform:rotate(180deg);color:var(--ink)}
+.panel{border-top:1px solid var(--g200);background:var(--g100)}
+.panel .more{display:flex;justify-content:flex-end;padding:0 28px 18px;font-size:13px}
+.panel.loading{height:120px;background:linear-gradient(90deg,var(--g100),var(--g50),var(--g100));background-size:200% 100%;animation:sh 1.2s linear infinite}
+@keyframes sh{to{background-position:-200% 0}}
+.selbar{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:var(--white);border-radius:14px;padding:10px 10px 10px 20px;display:flex;align-items:center;gap:16px;box-shadow:0 12px 32px #04040633;font-size:14px;z-index:5}
+.selbar[hidden]{display:none}
+.selbar .btn.ghost{background:transparent;border-color:var(--g700);color:var(--white)}
+.job{margin-top:24px}
+.job .log{font:12px/1.5 ui-monospace,Consolas,monospace;background:var(--ink);color:#c9d1d9;border-radius:10px;padding:10px 12px;max-height:160px;overflow:auto;white-space:pre-wrap;margin-top:10px}
+.start{padding:56px 0 24px;max-width:860px}
+.start p{color:var(--g600);font-size:16px;margin:14px 0 24px}
+.start .cats{display:flex;gap:8px;flex-wrap:wrap}
+@media (max-width:1100px){
+  .row{grid-template-columns:24px 60px 1fr 32px}
+  .row>.cov,.row>.cond,.row>.contact,.lhead>.h-cov,.lhead>.h-cond,.lhead>.h-contact{display:none}
+  .filters{margin-left:0}
+}
+@media (max-width:640px){.count-h .count{font-size:48px}.toolbar .acts{margin-left:0}}
+</style>
+{% endblock %}
 
-{% if job.log %}
-<div class="card" style="margin-top:14px" id="job">
-  <div class="row"><b>Живой поиск: {{ job.title }}</b><span class="tag {{ 'warn' if job.running else 'good' }}" id="jobstate">{{ 'идёт сбор…' if job.running else 'готово' }}</span></div>
-  <div class="log" id="joblog" style="margin-top:8px">{{ job.log|join('\n') }}</div>
+{% block band %}
+<div class="wrap band">
+  <form class="controls" method="get" action="/" id="search">
+    <div class="field"><span>Для сети</span><div class="seg" role="radiogroup" aria-label="Сеть">
+      <input type="radio" name="net" id="n0" value="" {{ 'checked' if not p.net }}><label for="n0">Все сети</label>
+      {% for k, v in NETS.items() %}<input type="radio" name="net" id="n-{{ k }}" value="{{ k }}" {{ 'checked' if p.net == k }}><label for="n-{{ k }}">{{ v }}</label>{% endfor %}
+    </div></div>
+    <label class="field"><span>Категория</span>
+      <select name="cat" id="cat">
+        <option value="">Все категории сети</option>
+        {% for c in CATS %}<option value="{{ c.id }}" data-nets="{{ c.nets|join(' ') }}" {{ 'selected' if p.cat == c.id }}>{{ c.name }}</option>{% endfor %}
+      </select></label>
+    <label class="field"><span>Город доставки</span>
+      <input name="city" value="{{ p.city }}" list="cities" autocomplete="off">
+      <datalist id="cities">{% for c in CITIES %}<option value="{{ c }}">{% endfor %}</datalist></label>
+    <label class="field"><span>Уточнить</span><input name="q" type="search" value="{{ p.q }}" placeholder="Форель, моцарелла, крафт…"></label>
+    <button class="btn cyan" type="submit" style="height:44px">{{ icon('search') }}Найти</button>
+  </form>
+  <div class="quick">Города сети:<span id="netcities" style="display:contents"></span></div>
 </div>
+{% endblock %}
+
+{% block body %}
+{% if job.log %}
+<div class="card job" id="job"><b>Живой поиск: {{ job.title }}</b> <span class="tag {{ 'warn' if job.running else 'good' }}">{{ 'идёт сбор…' if job.running else 'готово' }}</span>
+  <div class="log" id="joblog">{{ job.log|join('\n') }}</div></div>
 {% endif %}
 
 {% if not (p.cat or p.q or p.net) %}
-<div class="card empty" style="margin-top:14px">
-  <h2>С чего начать</h2>
-  <p class="muted">Выберите сеть и категорию — сервис покажет поставщиков из открытых источников с рейтингом, ценами, минимальным заказом, доставкой и документами. У каждого факта есть ссылка на источник.</p>
-  <div class="row" style="justify-content:center;margin-top:10px">
-    {% for c in CATS if c.nets|length > 1 %}<a class="btn ghost" href="/?cat={{ c.id }}&city={{ p.city|urlencode }}">{{ c.name }}</a>{% endfor %}
-  </div>
-</div>
+<section class="start">
+  <h1>С чего начать</h1>
+  <p>Выберите сеть и категорию. Сервис покажет поставщиков из открытых источников: рейтинг, условия доставки, минимальный заказ, документы, проверку юрлица. У каждого факта — ссылка на источник, а пробелы превращаются в вопросы письма-запроса КП.</p>
+  <div class="cats">{% for c in CATS if c.nets|length > 1 %}<a class="chip" href="/?cat={{ c.id }}&city={{ p.city|urlencode }}">{{ c.name }}</a>{% endfor %}</div>
+</section>
 {% else %}
-<div class="stats">
-  <span><b>{{ rows|length }}</b> <span class="muted">{% if rows|length != found %}из {{ found }} {% endif %}поставщиков · город {{ p.city }}</span></span>
-  <span class="small muted">— нет в открытых источниках, вопрос попадёт в запрос КП</span>
-  <div class="actions">
-    <button class="ghost" id="cmp" disabled>Сравнить выбранные (<span id="ncmp">0</span>)</button>
-    <a class="btn ghost" href="/export.xlsx?{{ request.url.query }}">Скачать XLSX</a>
+<section class="summary">
+  <h1 class="count-h"><span class="count">{{ rows|length }}</span><span>{{ plural(rows|length, 'поставщик', 'поставщика', 'поставщиков') }}
+    <small>{{ CAT[p.cat].name if p.cat else 'Все категории' ~ (' сети «' ~ NETS[p.net] ~ '»' if p.net else '') }} · {{ p.city }}{% if rows|length != found %} · из {{ found }} найденных{% endif %}</small></span></h1>
+  <div class="filters" role="group" aria-label="Фильтры">
+    {% for k, (label, _) in FILTERS.items() %}<input type="checkbox" name="only" value="{{ k }}" id="o-{{ k }}" form="search" {{ 'checked' if k in p.only }}><label class="chip" for="o-{{ k }}">{{ label }}<b>{{ counts[k] }}</b></label>{% endfor %}
+  </div>
+</section>
+<div class="toolbar">
+  <span class="lg"><span class="leds one"><span class="led on"></span></span>факт найден, у него есть источник</span>
+  <span class="lg"><span class="leds one"><span class="led"></span></span>не нашли — вопрос попадёт в запрос КП</span>
+  <div class="acts">
+    <a class="btn ghost" href="/export.xlsx?{{ request.url.query }}">{{ icon('download') }}Скачать XLSX</a>
     {% if p.cat %}
-    <form method="post" action="/live" style="display:inline">
-      <input type="hidden" name="cat" value="{{ p.cat }}"><input type="hidden" name="city" value="{{ p.city }}">
-      <input type="hidden" name="q" value="{{ p.q }}"><input type="hidden" name="net" value="{{ p.net }}">
-      {% if LIVE %}<button type="submit" {{ 'disabled' if job.running }} title="Ищет новые сайты поставщиков в Яндексе и обходит их (1–3 минуты)">{{ 'Идёт поиск…' if job.running else 'Найти новых в Яндексе' }}</button>
-      {% else %}<span class="small muted">Живой поиск выключен: нет ключа Yandex Search API</span>{% endif %}
-    </form>
+    {% if LIVE %}<form method="post" action="/live">
+      <input type="hidden" name="cat" value="{{ p.cat }}"><input type="hidden" name="city" value="{{ p.city }}"><input type="hidden" name="q" value="{{ p.q }}"><input type="hidden" name="net" value="{{ p.net }}">
+      <button class="btn" type="submit" {{ 'disabled' if job.running }} title="Ищет новые сайты поставщиков в Яндексе и обходит их, 1–3 минуты">{{ 'Идёт поиск…' if job.running else 'Найти новых в Яндексе' }}</button></form>
+    {% else %}<span class="small muted">Живой поиск выключен: нет ключа Yandex Search API</span>{% endif %}
     {% endif %}
   </div>
 </div>
 
 {% if rows %}
-<div class="tablewrap">
-<table>
-  <thead><tr><th></th><th>Поставщик</th><th>Рейтинг</th><th>Цена</th><th>Мин. заказ</th><th>Доставка</th><th>Документы</th><th>Контакты</th></tr></thead>
-  <tbody>
+<div class="ledger" role="table" aria-label="Поставщики">
+  <div class="row lhead" role="row"><span></span><span>Рейтинг</span><span>Поставщик</span><span class="h-cov">Что известно</span><span class="h-cond">Условия</span><span class="h-contact">Контакты</span><span></span></div>
   {% for s in rows %}
-  <tr>
-    <td><input type="checkbox" class="pick" value="{{ s.id }}" aria-label="Сравнить {{ s.name }}"><br>
-        <button class="star {{ 'on' if s.mark.starred }}" data-id="{{ s.id }}" aria-pressed="{{ 'true' if s.mark.starred else 'false' }}" title="В шортлист">★</button></td>
-    <td><a class="name" href="/s/{{ s.id }}?{{ ctx }}">{{ s.name }}</a>
-        <div class="small muted">{{ s.city or '' }}{% if s.legal.status %}{{ ' · ' if s.city }}{% if s.legal.status == 'ACTIVE' %}<span class="tag good">ЕГРЮЛ: действует</span>{% else %}<span class="tag bad">{{ s.legal.status }}</span>{% endif %}{% endif %}</div>
-        <div class="row small" style="gap:4px;margin-top:4px">
-          {% if not p.cat %}<span class="tag acc">{{ CAT[s.cat].name }}</span>{% endif %}
-          {% if s.mark.status %}<span class="tag warn">{{ s.mark.status }}</span>{% endif %}
-        </div></td>
-    <td><div class="score"><b>{{ s.score }}</b><span class="bar"><i style="width:{{ s.score }}%"></i></span></div>
-        <div class="why" title="{{ s.why|map(attribute=1)|join('; ') }}">{% for pts, w in s.why if not w.startswith(('Найден в Яндексе, категория', 'Есть предложение')) %}{% if loop.index <= 2 %}<span{% if pts < 0 %} style="color:var(--bad)"{% endif %}>{{ w }}</span>{{ '; ' if loop.index < 2 and not loop.last }}{% endif %}{% endfor %}</div></td>
-    <td class="clip">{{ first(s,'price') or '' }}{% if not first(s,'price') %}{{ NONE|safe }}{% endif %}
-        {% if s.facts.price_list %}<div><a class="small" href="{{ s.facts.price_list[0][0] }}" target="_blank" rel="noopener">прайс-лист</a></div>{% endif %}</td>
-    <td class="clip">{{ first(s,'moq') or '' }}{% if not first(s,'moq') %}{{ NONE|safe }}{% endif %}</td>
-    <td class="clip small">{{ allv(s,'delivery')|truncate(120) }}{% if not allv(s,'delivery') %}{{ NONE|safe }}{% endif %}</td>
-    <td class="small">{% for d in (s.facts.docs or [])[:3] %}<span class="tag good">{{ d[0] }}</span> {% endfor %}{% if not s.facts.docs %}{{ NONE|safe }}{% endif %}</td>
-    <td class="small contacts">{% if first(s,'phone') %}<a href="tel:{{ first(s,'phone') }}">{{ first(s,'phone')|tel }}</a>{% endif %}
-        {% if first(s,'email') %}<a href="mailto:{{ first(s,'email') }}" title="{{ first(s,'email') }}">{{ first(s,'email') }}</a>{% endif %}
-        {% if s.site %}<a href="{{ s.site }}" target="_blank" rel="noopener">{{ s.site|host }}</a>{% endif %}</td>
-  </tr>
+  {% set k = kind(s) %}
+  <div class="row item" role="row" tabindex="0" data-id="{{ s.id }}" data-panel="/s/{{ s.id }}/panel?{{ ctx }}" aria-expanded="false">
+    <span><input type="checkbox" class="pick" value="{{ s.id }}" aria-label="Выбрать для сравнения: {{ s.name }}"></span>
+    <span class="score {{ score_cls(s.score) }}" title="Рейтинг {{ s.score }} из 100">{{ s.score }}</span>
+    <span><a class="name" href="/s/{{ s.id }}?{{ ctx }}">{% if s.mark.starred %}{{ icon('star', 'sm') }}{% endif %}{{ s.name }}</a>
+      <div class="meta"><span>{{ legal_line(s) }}</span>{% if k %}<span class="tag {{ k[1] }}">{{ k[0] }}</span>{% endif %}
+        {% if not p.cat %}<span class="tag">{{ CAT[s.cat].name }}</span>{% endif %}{% if s.mark.status %}<span class="tag ink">{{ s.mark.status }}</span>{% endif %}</div></span>
+    <span class="cov"><span class="leds">{% for key, label in COVERAGE %}<span class="led {{ 'on' if has(s, key) }}" title="{{ label }}: {{ 'найдено' if has(s, key) else 'нет данных' }}"></span>{% endfor %}</span>
+      <div class="cov-cap">известно {{ known(s) }} из 8 · {{ zone(s) }}</div></span>
+    <span class="cond">{{ allv(s, 'delivery') or NONE|safe }}
+      {% set sub = [] %}{% if first(s, 'moq') %}{% set _ = sub.append('Мин. заказ ' ~ first(s, 'moq')) %}{% endif %}{% if first(s, 'price') %}{% set _ = sub.append('Цена ' ~ first(s, 'price')) %}{% endif %}
+      {% if sub %}<div class="sub">{{ sub|join(' · ') }}</div>{% endif %}</span>
+    <span class="contact">{% if first(s, 'phone') %}<a href="tel:{{ first(s, 'phone') }}">{{ first(s, 'phone')|tel }}</a>{% endif %}
+      {% if first(s, 'email') %}<a href="mailto:{{ first(s, 'email') }}" title="{{ first(s, 'email') }}">{{ first(s, 'email') }}</a>{% endif %}
+      {% if s.site %}<a class="host" href="{{ s.site }}" target="_blank" rel="noopener">{{ s.site|host }}</a>{% endif %}</span>
+    <span class="chev">{{ icon('chevron') }}</span>
+  </div>
   {% endfor %}
-  </tbody>
-</table>
 </div>
 {% else %}
-<div class="card empty"><p>По этим условиям поставщиков пока нет.</p><p class="muted small">Снимите часть фильтров{% if p.cat and LIVE %} или запустите «Найти новых в Яндексе»{% endif %}.</p></div>
+<div class="ledger empty"><p>По этим условиям поставщиков пока нет.</p><p class="small">Снимите часть фильтров{% if p.cat and LIVE %} или запустите «Найти новых в Яндексе»{% endif %}.</p></div>
 {% endif %}
 {% endif %}
+
+<div class="selbar" id="selbar" hidden><span id="seltext"></span>
+  <button class="btn cyan" type="button" id="cmp">Сравнить</button><button class="btn ghost" type="button" id="selclear">Снять выбор</button></div>
 {% endblock %}
 
 {% block scripts %}
 <script>
+const form = document.getElementById('search'), sel = document.getElementById('cat');
 const net = () => (document.querySelector('input[name=net]:checked') || {}).value || '';
-const sel = document.getElementById('cat');
 function filterCats() {
   const n = net();
   for (const o of sel.options) if (o.value) o.hidden = !!n && !o.dataset.nets.split(' ').includes(n);
@@ -116,33 +149,53 @@ function filterCats() {
 }
 const NC = {{ NET_CITIES|tojson }};
 function netCities() {  // быстрый выбор: города, где работает выбранная сеть
-  const n = net(), list = n ? NC[n] : [...new Set(Object.values(NC).flat())];
-  const box = document.getElementById('netcities'), city = document.querySelector('input[name=city]');
-  box.innerHTML = '';
-  for (const c of list) {
-    const b = document.createElement('button');
-    b.type = 'button'; b.className = 'tag' + (city.value === c ? ' acc' : ''); b.textContent = c;
-    b.style.cssText = 'border:0;cursor:pointer;margin-right:4px';
-    b.onclick = () => { city.value = c; form.requestSubmit(); };
-    box.appendChild(b);
-  }
+  const n = net(), list = n ? NC[n] : [...new Set(Object.values(NC).flat())], city = form.elements.city;
+  document.getElementById('netcities').innerHTML = list.map(c => `<button type="button" class="${city.value === c ? 'on' : ''}" data-city="${c}">${c}</button>`).join('');
 }
-document.querySelectorAll('input[name=net]').forEach(r => r.addEventListener('change', () => { filterCats(); netCities(); }));
 filterCats(); netCities();
-const form = document.getElementById('search');  // фильтры применяются сразу, «Найти» — для текста уточнения
-form.addEventListener('change', e => {
+// фильтры, сеть, категория и город применяются сразу; «Найти» — для текста уточнения
+document.addEventListener('change', e => {
+  if (e.target.matches('input[name=net]')) filterCats();
   if (e.target.matches('input[name=net], input[name=only], select[name=cat], input[name=city]')) form.requestSubmit();
 });
+document.addEventListener('click', e => {
+  const c = e.target.closest('[data-city]');
+  if (c) { form.elements.city.value = c.dataset.city; form.requestSubmit(); }
+});
+
+// раскрытие карточки в строке
+async function toggle(row) {
+  const next = row.nextElementSibling, open = next && next.classList.contains('panel');
+  document.querySelectorAll('.item.open').forEach(r => { r.classList.remove('open'); r.setAttribute('aria-expanded', 'false'); r.nextElementSibling?.classList.contains('panel') && r.nextElementSibling.remove(); });
+  if (open) return;
+  row.classList.add('open'); row.setAttribute('aria-expanded', 'true');
+  const p = document.createElement('div'); p.className = 'panel loading'; row.after(p);
+  const html = await (await fetch(row.dataset.panel)).text();
+  p.classList.remove('loading');
+  p.innerHTML = html + `<div class="more"><a href="${row.querySelector('.name').getAttribute('href')}">Открыть отдельной страницей →</a></div>`;
+}
+document.addEventListener('click', e => {
+  const row = e.target.closest('.item');
+  if (!row || e.target.closest('input, button, a:not(.name)')) return;
+  if (e.target.closest('a.name') && (e.ctrlKey || e.metaKey || e.shiftKey || e.button)) return;
+  e.preventDefault(); toggle(row);
+});
+document.addEventListener('keydown', e => {
+  if (e.target.classList?.contains('item') && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); toggle(e.target); }
+});
+
+// выбор для сравнения
 const picks = () => [...document.querySelectorAll('.pick:checked')].map(x => x.value);
-const cmp = document.getElementById('cmp');
 document.addEventListener('change', e => {
   if (!e.target.classList.contains('pick')) return;
-  const ids = picks();
-  if (ids.length > 4) { e.target.checked = false; return; }
-  document.getElementById('ncmp').textContent = ids.length;
-  cmp.disabled = ids.length < 2;
+  if (picks().length > 4) { e.target.checked = false; toast('Сравнить можно до четырёх поставщиков'); }
+  const n = picks().length;
+  document.getElementById('selbar').hidden = !n;
+  document.getElementById('seltext').textContent = n === 1 ? 'Выбран 1 — отметьте ещё хотя бы одного' : `Выбрано ${n} из 4`;
+  document.getElementById('cmp').disabled = n < 2;
 });
-cmp && cmp.addEventListener('click', () => location.href = '/compare?ids=' + picks().join(',') + '&{{ ctx|safe }}');
+document.getElementById('cmp').addEventListener('click', () => location.href = '/compare?ids=' + picks().join(',') + '&{{ ctx|safe }}');
+document.getElementById('selclear').addEventListener('click', () => { document.querySelectorAll('.pick:checked').forEach(x => x.checked = false); document.getElementById('selbar').hidden = true; });
 {% if job.running %}
 const poll = setInterval(async () => {
   const j = await (await fetch('/live/status')).json();

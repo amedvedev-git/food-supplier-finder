@@ -1,6 +1,7 @@
 """Веб-интерфейс закупщика: поиск → карточка → сравнение → шортлист → запрос КП. Запуск: uvicorn app:app"""
 import io
 import os
+import re
 import threading
 from urllib.parse import quote
 
@@ -59,6 +60,46 @@ def focus(s, cats, city):
     return core.focus(s, cats[0], city) if cats else s.update(score=0, why=[], miss=[], cat="") or s
 
 
+# --- для шаблонов: полоса покрытия, зона доставки, вид деятельности ------------------------------------------
+COVERAGE = [("price", "Цена"), ("moq", "Мин. заказ"), ("delivery", "Доставка"), ("docs", "Документы"),
+            ("phone", "Телефон"), ("email", "Email"), ("inn", "ИНН"), ("egrul", "ЕГРЮЛ")]
+LEGAL_RU = {"ACTIVE": "действует", "LIQUIDATED": "ликвидировано", "LIQUIDATING": "ликвидируется",
+            "BANKRUPT": "банкрот", "REORGANIZING": "реорганизация", "НЕ НАЙДЕН": "нет в ЕГРЮЛ"}
+
+
+def has(s, k):
+    return s["legal"].get("status") == "ACTIVE" if k == "egrul" else bool(s["facts"].get(k))
+
+
+def zone(s):
+    for p, t in s["why"]:
+        if p > 0 and t.startswith("Работает в регионе"):
+            return "в регионе"
+        if t.startswith("Доставляет в регион"):
+            return "доставляют в регион"
+        if t.startswith("Доставка по России"):
+            return "по всей России"
+    return "зона доставки не указана"
+
+
+def kind(s):
+    o = s["legal"].get("okved") or ""
+    return (("опт", "good") if o.startswith("46") else ("производитель", "good") if o.startswith(("10", "11")) else
+            ("розница", "warn") if o.startswith("47") else ("общепит", "bad") if o.startswith("56") else None)
+
+
+def plural(n, one, few, many):
+    return one if n % 10 == 1 and n % 100 != 11 else few if 2 <= n % 10 <= 4 and not 12 <= n % 100 <= 14 else many
+
+
+def legal_line(s):
+    l = s["legal"]  # noqa: E741
+    if not l.get("status"):
+        return "ИНН найден, ЕГРЮЛ не проверен" if s["inn"] or s["facts"].get("inn") else "ИНН не найден"
+    years = f" · {l['years']} {plural(l['years'], 'год', 'года', 'лет')}" if l.get("years") is not None else ""
+    return f"ЕГРЮЛ: {LEGAL_RU.get(l['status'], l['status'])}{years}"
+
+
 def letter(s, p):
     cat = core.CAT.get(s.get("cat") or p["cat"], {}).get("name", "продукция").lower()
     net = f"сеть «{core.NETS[p['net']]}»" if p["net"] in core.NETS else "сеть ресторанов"
@@ -74,9 +115,13 @@ def letter(s, p):
             "mailto": f"mailto:{email}?subject={quote(subj)}&body={quote(body)}" if email else ""}
 
 
-T.env.globals.update(first=first, allv=allv)
+T.env.globals.update(first=first, allv=allv, has=has, zone=zone, kind=kind, plural=plural, legal_line=legal_line,
+                     COVERAGE=COVERAGE, LEGAL_RU=LEGAL_RU, known=lambda s: sum(has(s, k) for k, _ in COVERAGE),
+                     shortlist_n=lambda: db().execute("select count(*) from marks where starred=1 or status!=''").fetchone()[0])
 T.env.filters["host"] = core.host
 T.env.filters["tel"] = lambda p: f"{p[:2]} {p[2:5]} {p[5:8]}-{p[8:10]}-{p[10:]}" if p and len(p) == 12 else p
+T.env.filters["telify"] = lambda t: re.sub(r"\+7\d{10}", lambda m: T.env.filters["tel"](m.group()), t)
+T.env.globals["score_cls"] = lambda n: "" if n >= 75 else "mid" if n >= 55 else "low"
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -89,24 +134,42 @@ def index(request: Request):
                                                       "job": JOB})
 
 
-@app.get("/s/{sid}", response_class=HTMLResponse)
-def supplier(request: Request, sid: int):
+def card_context(request, sid):
     p = params(request)
     s = core.load(db(), sid)
     if not s:
-        return RedirectResponse("/")
+        return None
     cats = sorted({o["category"] for o in s["offers"]}, key=lambda x: x != p["cat"])
     focus(s, cats, p["city"])
-    return T.TemplateResponse(request, "supplier.html", {"p": p, "s": s, "cats": cats, "letter": letter(s, p)})
+    return {"p": p, "s": s, "cats": cats, "letter": letter(s, p)}
+
+
+@app.get("/s/{sid}", response_class=HTMLResponse)
+def supplier(request: Request, sid: int):
+    ctx = card_context(request, sid)
+    return T.TemplateResponse(request, "supplier.html", ctx) if ctx else RedirectResponse("/")
+
+
+@app.get("/s/{sid}/panel", response_class=HTMLResponse)
+def panel(request: Request, sid: int):
+    """Карточка, раскрытая в строке выдачи."""
+    ctx = card_context(request, sid)
+    return T.TemplateResponse(request, "_card.html", ctx) if ctx else HTMLResponse("", status_code=404)
 
 
 @app.post("/s/{sid}/mark")
-def mark(sid: int, status: str = Form(""), note: str = Form(""), starred: str = Form(""), back: str = Form("/")):
+def mark(sid: int, status: str = Form(None), note: str = Form(None), starred: str = Form(None), back: str = Form("")):
+    """Меняет только присланные поля: статус из выдачи не затирает заметку и наоборот."""
     c = db()
-    c.execute("insert or replace into marks values(?,?,?,?,?)", (sid, status, note[:2000], int(bool(starred)),
-                                                                 core.now()))
+    m = c.execute("select * from marks where supplier_id=?", (sid,)).fetchone()
+    old = dict(m) if m else {"status": "", "note": "", "starred": 0}
+    c.execute("insert or replace into marks values(?,?,?,?,?)",
+              (sid, old["status"] if status is None else status, old["note"] if note is None else note[:2000],
+               old["starred"] if starred is None else int(starred == "1"), core.now()))
     c.commit()
-    return RedirectResponse(back if back.startswith("/") else "/", status_code=303)
+    if back.startswith("/"):
+        return RedirectResponse(back, status_code=303)
+    return JSONResponse({"ok": True})
 
 
 @app.post("/s/{sid}/star")

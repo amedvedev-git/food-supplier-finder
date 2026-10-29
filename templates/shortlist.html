@@ -1,21 +1,41 @@
 {% extends "base.html" %}
+{% from "_icons.html" import icon %}
 {% block title %}Шортлист{% endblock %}
+{% block head %}
+<style>
+.sl{margin-top:28px}
+.sl td{vertical-align:middle;font-size:14px}
+.sl a.name{font-weight:600;font-size:15px;text-decoration:none}.sl a.name:hover{text-decoration:underline}
+.sl .note{max-width:280px;color:var(--g600)}
+.sl .star{background:none;border:0;cursor:pointer;color:var(--g400);padding:6px;border-radius:8px;display:grid}
+.sl .star[aria-pressed=true]{color:var(--ink)}.sl .star[aria-pressed=true] .ic{fill:var(--cyan)}
+.bandrow{display:flex;align-items:flex-end;gap:20px;flex-wrap:wrap}
+.bandrow .btn{margin-left:auto;background:var(--g800);border-color:var(--g700)}
+</style>
+{% endblock %}
+{% block band %}
+<div class="wrap band"><div class="bandrow">
+  <div><h1>Шортлист</h1><p class="lead">Поставщики со звёздочкой или статусом работы. Отмечайте ★ в выдаче и ставьте статус в карточке.</p></div>
+  {% if rows %}<a class="btn" href="/export.xlsx?what=shortlist&city={{ p.city|urlencode }}">{{ icon('download') }}Скачать XLSX</a>{% endif %}
+</div></div>
+{% endblock %}
 {% block body %}
-<div class="row"><h1>Шортлист и работа с поставщиками</h1>
-  <div class="actions"><a class="btn ghost" href="/export.xlsx?what=shortlist&city={{ p.city|urlencode }}">Скачать XLSX</a></div></div>
 {% if rows %}
-<div class="tablewrap"><table>
-  <thead><tr><th></th><th>Поставщик</th><th>Категория</th><th>Рейтинг</th><th>Статус</th><th>Заметка</th><th>Контакты</th></tr></thead>
+<div class="tablewrap sl"><table>
+  <thead><tr><th></th><th>Рейтинг</th><th>Поставщик</th><th>Категория</th><th>Статус</th><th>Заметка</th><th>Контакты</th></tr></thead>
   <tbody>{% for s in rows %}
   <tr>
-    <td><button class="star {{ 'on' if s.mark.starred }}" data-id="{{ s.id }}" aria-pressed="{{ 'true' if s.mark.starred else 'false' }}" title="В шортлист">★</button></td>
-    <td><a class="name" href="/s/{{ s.id }}?cat={{ s.cat }}&city={{ p.city|urlencode }}">{{ s.name }}</a><div class="small muted">{{ s.city or '' }}</div></td>
-    <td class="small">{{ CAT[s.cat].name if s.cat else '' }}</td>
-    <td><b>{{ s.score }}</b></td>
-    <td>{% if s.mark.status %}<span class="tag warn">{{ s.mark.status }}</span>{% else %}<span class="none">—</span>{% endif %}</td>
-    <td class="small clip">{{ s.mark.note }}</td>
-    <td class="small">{{ first(s,'phone')|tel }}<br>{{ first(s,'email') }}</td>
+    <td><button class="star" type="button" data-star="{{ s.id }}" aria-pressed="{{ 'true' if s.mark.starred else 'false' }}" aria-label="Шортлист">{{ icon('star') }}</button></td>
+    <td><span class="score {{ score_cls(s.score) }}">{{ s.score }}</span></td>
+    <td><a class="name" href="/s/{{ s.id }}?cat={{ s.cat }}&city={{ p.city|urlencode }}">{{ s.name }}</a><div class="small muted">{{ legal_line(s) }}</div></td>
+    <td>{{ CAT[s.cat].name if s.cat else '' }}</td>
+    <td>{% if s.mark.status %}<span class="tag ink">{{ s.mark.status }}</span>{% else %}<span class="gap">—</span>{% endif %}</td>
+    <td class="note">{{ s.mark.note }}</td>
+    <td>{% if first(s, 'phone') %}<div><a href="tel:{{ first(s, 'phone') }}">{{ first(s, 'phone')|tel }}</a></div>{% endif %}{% if first(s, 'email') %}<a href="mailto:{{ first(s, 'email') }}">{{ first(s, 'email') }}</a>{% endif %}</td>
   </tr>{% endfor %}</tbody>
 </table></div>
-{% else %}<div class="card empty"><p>Пока пусто.</p><p class="muted small">Отмечайте поставщиков звёздочкой ★ в поиске или ставьте статус в карточке.</p></div>{% endif %}
+{% else %}
+<div class="card empty sl"><p>Пока пусто.</p><p class="small">Отмечайте поставщиков звёздочкой в карточке или ставьте статус работы — они появятся здесь.</p>
+  <p style="margin-top:16px"><a class="btn ghost" href="/">К поиску</a></p></div>
+{% endif %}
 {% endblock %}

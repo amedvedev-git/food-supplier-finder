@@ -1,25 +1,41 @@
 {% extends "base.html" %}
+{% from "_icons.html" import icon %}
 {% block title %}Сравнение{% endblock %}
 {% set ctx = 'cat=' ~ p.cat ~ '&city=' ~ (p.city|urlencode) ~ '&net=' ~ p.net %}
-{% block body %}
-<p class="small"><a href="/?{{ ctx }}">← к результатам</a></p>
-<h1>Сравнение поставщиков{% if p.cat %} · {{ CAT[p.cat].name }}{% endif %} · {{ p.city }}</h1>
-{% if items|length < 2 %}<div class="card empty">Отметьте в списке от 2 до 4 поставщиков.</div>{% else %}
-<div class="tablewrap">
-<table>
-  <thead><tr><th style="width:150px"></th>{% for s in items %}<th style="text-transform:none;font-size:14px;color:var(--ink)"><a class="name" href="/s/{{ s.id }}?{{ ctx }}">{{ s.name }}</a><div class="small muted" style="font-weight:400">{{ s.city or '' }}</div></th>{% endfor %}</tr></thead>
-  <tbody>
-    {% set best = items|map(attribute='score')|max %}
-    <tr><td class="muted">Рейтинг</td>{% for s in items %}<td><div class="score"><b>{{ s.score }}</b><span class="bar"><i style="width:{{ s.score }}%"></i></span></div>{% if s.score == best %}<span class="tag good">лучший</span>{% endif %}</td>{% endfor %}</tr>
-    {% for f in ['price','moq','delivery','docs','geo'] if items|map(attribute='facts')|map(attribute=f)|select|list %}
-    <tr><td class="muted">{{ LABELS[f] }}</td>{% for s in items %}<td class="small">{% if s.facts[f] %}{% for v in s.facts[f][:3] %}<div>{{ v[0] }}</div>{% endfor %}{% else %}<span class="none">не найдено</span>{% endif %}</td>{% endfor %}</tr>
-    {% endfor %}
-    <tr><td class="muted">Юрлицо</td>{% for s in items %}<td class="small">{% if s.legal.status %}<span class="tag {{ 'good' if s.legal.status == 'ACTIVE' else 'bad' }}">{{ 'действует' if s.legal.status == 'ACTIVE' else s.legal.status }}</span>{% if s.legal.years is not none %} {{ s.legal.years }} лет{% endif %}{% elif s.inn %}ИНН {{ s.inn }}{% else %}<span class="none">ИНН не найден</span>{% endif %}</td>{% endfor %}</tr>
-    <tr><td class="muted">Контакты</td>{% for s in items %}<td class="small">{% if first(s,'phone') %}<div>{{ first(s,'phone')|tel }}</div>{% endif %}{% if first(s,'email') %}<div>{{ first(s,'email') }}</div>{% endif %}{% if s.site %}<a href="{{ s.site }}" target="_blank" rel="noopener">сайт</a>{% endif %}</td>{% endfor %}</tr>
-    {% if items|selectattr('miss')|list %}<tr><td class="muted">Не хватает</td>{% for s in items %}<td>{% for m in s.miss %}<span class="tag warn">{{ m }}</span> {% endfor %}</td>{% endfor %}</tr>{% endif %}
-    {% if items|selectattr('mark.status')|list or items|selectattr('mark.note')|list %}<tr><td class="muted">Статус, заметка</td>{% for s in items %}<td class="small">{% if s.mark.status %}<span class="tag warn">{{ s.mark.status }}</span>{% endif %} {{ s.mark.note }}</td>{% endfor %}</tr>{% endif %}
-  </tbody>
-</table>
+{% block head %}
+<style>
+.cmp{margin-top:28px}
+.cmp th{font-size:15px;font-weight:600;color:var(--ink);background:var(--white);vertical-align:bottom}
+.cmp th .meta{font-size:13px;font-weight:400;color:var(--g500);margin-top:4px}
+.cmp td:first-child,.cmp th:first-child{width:150px;color:var(--g500);font-size:14px}
+.cmp td{font-size:14px}
+.cmp .scrow{display:flex;align-items:center;gap:10px}
+.cmp a.name{text-decoration:none}.cmp a.name:hover{text-decoration:underline}
+</style>
+{% endblock %}
+{% block band %}
+<div class="wrap band">
+  <a class="back" href="/?{{ ctx }}">{{ icon('back') }}К результатам</a>
+  <h1>Сравнение{% if p.cat %} · {{ CAT[p.cat].name }}{% endif %} · {{ p.city }}</h1>
 </div>
+{% endblock %}
+{% block body %}
+{% if items|length < 2 %}<div class="card empty cmp"><p>Отметьте в выдаче от двух до четырёх поставщиков.</p></div>{% else %}
+{% set best = items|map(attribute='score')|max %}
+<div class="tablewrap cmp"><table>
+  <thead><tr><th></th>{% for s in items %}<th><a class="name" href="/s/{{ s.id }}?{{ ctx }}">{{ s.name }}</a><div class="meta">{{ legal_line(s) }}</div></th>{% endfor %}</tr></thead>
+  <tbody>
+    <tr><td>Рейтинг</td>{% for s in items %}<td><div class="scrow"><span class="score {{ score_cls(s.score) }}">{{ s.score }}</span>{% if s.score == best %}<span class="tag good">выше всех</span>{% endif %}</div></td>{% endfor %}</tr>
+    <tr><td>Что известно</td>{% for s in items %}<td><span class="leds">{% for key, label in COVERAGE %}<span class="led {{ 'on' if has(s, key) }}" title="{{ label }}"></span>{% endfor %}</span><div class="small muted" style="margin-top:6px">{{ known(s) }} из 8 · {{ zone(s) }}</div></td>{% endfor %}</tr>
+    {% for f in ['delivery', 'moq', 'price', 'docs'] if items|map(attribute='facts')|map(attribute=f)|select|list %}
+    <tr><td>{{ LABELS[f] }}</td>{% for s in items %}<td>{% if f == 'delivery' %}{{ allv(s, 'delivery') or '' }}{% else %}{% for v in (s.facts[f] or [])[:3] %}<div>{{ v[0] }}</div>{% endfor %}{% endif %}{% if not s.facts[f] %}<span class="gap">нет данных</span>{% endif %}</td>{% endfor %}</tr>
+    {% endfor %}
+    <tr><td>Юрлицо</td>{% for s in items %}<td>{% if s.legal.status %}<span class="tag {{ 'good' if s.legal.status == 'ACTIVE' else 'bad' }}">{{ LEGAL_RU.get(s.legal.status, s.legal.status) }}</span>{% if kind(s) %} <span class="tag {{ kind(s)[1] }}">{{ kind(s)[0] }}</span>{% endif %}{% elif s.inn %}ИНН {{ s.inn }}{% else %}<span class="gap">ИНН не найден</span>{% endif %}</td>{% endfor %}</tr>
+    <tr><td>Контакты</td>{% for s in items %}<td>{% if first(s, 'phone') %}<div><a href="tel:{{ first(s, 'phone') }}">{{ first(s, 'phone')|tel }}</a></div>{% endif %}{% if first(s, 'email') %}<div><a href="mailto:{{ first(s, 'email') }}">{{ first(s, 'email') }}</a></div>{% endif %}{% if s.site %}<a href="{{ s.site }}" target="_blank" rel="noopener">{{ s.site|host }}</a>{% endif %}</td>{% endfor %}</tr>
+    {% if items|selectattr('miss')|list %}<tr><td>Спросим в КП</td>{% for s in items %}<td><div class="asks">{% for m in s.miss %}<span class="tag warn">{{ m }}</span>{% endfor %}</div></td>{% endfor %}</tr>{% endif %}
+    {% if items|selectattr('mark.status')|list or items|selectattr('mark.note')|list %}<tr><td>Статус, заметка</td>{% for s in items %}<td>{% if s.mark.status %}<span class="tag ink">{{ s.mark.status }}</span> {% endif %}{{ s.mark.note }}</td>{% endfor %}</tr>{% endif %}
+    <tr><td></td>{% for s in items %}<td><button class="btn ghost star" type="button" data-star="{{ s.id }}" aria-pressed="{{ 'true' if s.mark.starred else 'false' }}">{{ icon('star') }}<span class="label">{{ 'В шортлисте' if s.mark.starred else 'В шортлист' }}</span></button></td>{% endfor %}</tr>
+  </tbody>
+</table></div>
 {% endif %}
 {% endblock %}
