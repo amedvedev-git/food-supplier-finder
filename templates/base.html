@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Поиск поставщиков{% endblock %} · Закупки</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--ink:#14171c;--muted:#5d6672;--line:#e2e5e9;--accent:#00a9c4;--accent-ink:#006b7d;
+--accent-bg:#e3f7fa;--good:#1a7f4b;--good-bg:#e6f4ec;--warn:#9a5b00;--warn-bg:#fdf1dc;--bad:#b3261e;--bad-bg:#fbe7e5}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+a{color:var(--accent-ink)}
+header{background:#0d1117;color:#fff}
+header .wrap{display:flex;align-items:center;gap:24px;height:56px}
+header .logo{font-weight:700;letter-spacing:.2px;color:#fff;text-decoration:none;display:flex;gap:8px;align-items:center}
+header .logo i{width:22px;height:22px;border-radius:6px;background:var(--accent);display:inline-block}
+header nav{display:flex;gap:18px;margin-left:auto}
+header nav a{color:#c9d1d9;text-decoration:none}
+header nav a.on,header nav a:hover{color:#fff}
+.wrap{max-width:1240px;margin:0 auto;padding:0 16px}
+main{padding:20px 0 60px}
+h1{font-size:22px;margin:4px 0 14px}
+h2{font-size:17px;margin:0 0 10px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
+.muted{color:var(--muted)}
+.small{font-size:13px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.grid{display:grid;gap:16px}
+@media(min-width:900px){.grid.two{grid-template-columns:1.25fr 1fr}}
+form.search{display:grid;gap:12px}
+@media(min-width:900px){form.search .fields{display:grid;grid-template-columns:2fr 1.1fr 1.6fr auto;gap:10px;align-items:end}}
+.fields{display:grid;gap:10px}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}
+input[type=text],input:not([type]),select,textarea{font:inherit;padding:9px 10px;border:1px solid #cfd4da;border-radius:8px;background:#fff;color:var(--ink);width:100%}
+textarea{min-height:90px;resize:vertical}
+button,.btn{font:inherit;cursor:pointer;border:1px solid var(--accent-ink);background:var(--accent-ink);color:#fff;border-radius:8px;padding:9px 16px;text-decoration:none;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+button.ghost,.btn.ghost{background:#fff;color:var(--accent-ink)}
+button:disabled{opacity:.45;cursor:default}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chips input{position:absolute;opacity:0;pointer-events:none}
+.chips label{border:1px solid #cfd4da;border-radius:999px;padding:5px 12px;cursor:pointer;background:#fff;font-size:14px}
+.chips input:checked+label{background:var(--accent-bg);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+.chips input:focus-visible+label{outline:2px solid var(--accent)}
+.tag{display:inline-block;font-size:12px;padding:1px 8px;border-radius:999px;background:#eef0f3;color:var(--muted);white-space:nowrap}
+.tag.good{background:var(--good-bg);color:var(--good)}.tag.warn{background:var(--warn-bg);color:var(--warn)}
+.tag.bad{background:var(--bad-bg);color:var(--bad)}.tag.acc{background:var(--accent-bg);color:var(--accent-ink)}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:#fff}
+table{border-collapse:collapse;width:100%}
+th,td{text-align:left;vertical-align:top;padding:10px 12px;border-bottom:1px solid var(--line)}
+th{font-size:12px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);background:#fafbfc;position:sticky;top:0}
+tr:last-child td{border-bottom:0}
+tbody tr:hover{background:#fbfcfd}
+td .name{font-weight:600;color:var(--ink);text-decoration:none}
+td .name:hover{text-decoration:underline}
+.score{display:flex;align-items:center;gap:8px;min-width:120px}
+.score b{font-size:18px;width:30px}
+.bar{flex:1;height:6px;border-radius:3px;background:#eceff2;overflow:hidden;min-width:50px}
+.bar i{display:block;height:100%;background:var(--accent)}
+.why{font-size:12px;color:var(--muted);margin-top:4px;max-width:260px}
+.none{color:#a3a9b1}
+.clip{max-width:240px}
+.star{background:none;border:0;color:#c3c8cf;font-size:20px;padding:0 4px;cursor:pointer}
+.star.on{color:#f0a500}
+.stats{display:flex;gap:18px;flex-wrap:wrap;margin:14px 0 10px;align-items:center}
+.stats b{font-size:18px}
+.actions{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+dl.facts{display:grid;grid-template-columns:130px 1fr;gap:10px 14px;margin:0}
+dl.facts dt{color:var(--muted);font-size:13px;padding-top:2px}
+dl.facts dd{margin:0}
+.q{font-size:12px;color:var(--muted);border-left:3px solid var(--line);padding-left:8px;margin-top:3px}
+.empty{padding:28px;text-align:center}
+.log{font:12px/1.5 ui-monospace,Consolas,monospace;background:#0d1117;color:#c9d1d9;border-radius:10px;padding:10px 12px;max-height:160px;overflow:auto;white-space:pre-wrap}
+ul.plain{list-style:none;padding:0;margin:0}
+ul.plain li{padding:4px 0}
+.pts{display:inline-block;width:38px;font-weight:600}
+.pts.neg{color:var(--bad)}
+.big{font-size:40px;font-weight:700;line-height:1}
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <a class="logo" href="/"><i></i>Поставщики</a>
+  <nav>
+    <a href="/" class="{{ 'on' if request.url.path == '/' }}">Поиск</a>
+    <a href="/shortlist?city={{ p.city|urlencode }}" class="{{ 'on' if request.url.path == '/shortlist' }}">Шортлист</a>
+    <a href="/about" class="{{ 'on' if request.url.path == '/about' }}">Как это работает</a>
+  </nav>
+</div></header>
+<main><div class="wrap">{% block body %}{% endblock %}</div></main>
+<script>
+document.addEventListener('click', async e => {
+  const b = e.target.closest('.star'); if (!b) return;
+  e.preventDefault();
+  const r = await fetch('/s/' + b.dataset.id + '/star', {method: 'POST'});
+  const j = await r.json(); b.classList.toggle('on', !!j.starred);
+  b.setAttribute('aria-pressed', j.starred ? 'true' : 'false');
+});
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

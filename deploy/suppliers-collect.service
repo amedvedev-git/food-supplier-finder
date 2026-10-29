@@ -1,0 +1,16 @@
+[Unit]
+Description=Supplier finder: full collection run (catalogs, Yandex, sites, DaData)
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=suppliers
+Group=suppliers
+WorkingDirectory=/opt/suppliers
+EnvironmentFile=-/etc/suppliers.env
+ExecStart=/opt/suppliers/.venv/bin/python collect.py seed --pages 2
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/suppliers/data
+PrivateTmp=true

@@ -1,0 +1,21 @@
+[Unit]
+Description=Supplier finder web (FastAPI, behind Caddy)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=suppliers
+Group=suppliers
+WorkingDirectory=/opt/suppliers
+EnvironmentFile=-/etc/suppliers.env
+ExecStart=/opt/suppliers/.venv/bin/uvicorn app:app --host 0.0.0.0 --port 8766 --proxy-headers --forwarded-allow-ips=172.18.0.0/16
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/suppliers/data
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

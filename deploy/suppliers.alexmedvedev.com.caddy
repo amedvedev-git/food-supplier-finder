@@ -1,0 +1,11 @@
+# suppliers.alexmedvedev.com — прототип поиска поставщиков (тестовое Goulash.tech).
+# app.py слушает 0.0.0.0:8766 на хосте, Caddy в Docker ходит через мост 172.18.0.1; снаружи порт закрыт ufw.
+suppliers.alexmedvedev.com {
+	reverse_proxy 172.18.0.1:8766
+
+	header {
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+}

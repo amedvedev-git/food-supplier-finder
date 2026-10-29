@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Сравнение{% endblock %}
+{% set ctx = 'cat=' ~ p.cat ~ '&city=' ~ (p.city|urlencode) ~ '&net=' ~ p.net %}
+{% block body %}
+<p class="small"><a href="/?{{ ctx }}">← к результатам</a></p>
+<h1>Сравнение поставщиков{% if p.cat %} · {{ CAT[p.cat].name }}{% endif %} · {{ p.city }}</h1>
+{% if items|length < 2 %}<div class="card empty">Отметьте в списке от 2 до 4 поставщиков.</div>{% else %}
+<div class="tablewrap">
+<table>
+  <thead><tr><th style="width:150px"></th>{% for s in items %}<th style="text-transform:none;font-size:14px;color:var(--ink)"><a class="name" href="/s/{{ s.id }}?{{ ctx }}">{{ s.name }}</a><div class="small muted" style="font-weight:400">{{ s.city or '' }}</div></th>{% endfor %}</tr></thead>
+  <tbody>
+    {% set best = items|map(attribute='score')|max %}
+    <tr><td class="muted">Рейтинг</td>{% for s in items %}<td><div class="score"><b>{{ s.score }}</b><span class="bar"><i style="width:{{ s.score }}%"></i></span></div>{% if s.score == best %}<span class="tag good">лучший</span>{% endif %}</td>{% endfor %}</tr>
+    {% for f in ['price','moq','delivery','docs','geo'] %}
+    <tr><td class="muted">{{ LABELS[f] }}</td>{% for s in items %}<td class="small">{% if s.facts[f] %}{% for v in s.facts[f][:3] %}<div>{{ v[0] }}</div>{% endfor %}{% else %}<span class="none">не найдено</span>{% endif %}</td>{% endfor %}</tr>
+    {% endfor %}
+    <tr><td class="muted">Юрлицо</td>{% for s in items %}<td class="small">{% if s.legal.status %}<span class="tag {{ 'good' if s.legal.status == 'ACTIVE' else 'bad' }}">{{ 'действует' if s.legal.status == 'ACTIVE' else s.legal.status }}</span>{% if s.legal.years is not none %} {{ s.legal.years }} лет{% endif %}{% elif s.inn %}ИНН {{ s.inn }}{% else %}<span class="none">ИНН не найден</span>{% endif %}</td>{% endfor %}</tr>
+    <tr><td class="muted">Контакты</td>{% for s in items %}<td class="small">{% if first(s,'phone') %}<div>{{ first(s,'phone')|tel }}</div>{% endif %}{% if first(s,'email') %}<div>{{ first(s,'email') }}</div>{% endif %}{% if s.site %}<a href="{{ s.site }}" target="_blank" rel="noopener">сайт</a>{% endif %}</td>{% endfor %}</tr>
+    <tr><td class="muted">Не хватает</td>{% for s in items %}<td>{% for m in s.miss %}<span class="tag warn">{{ m }}</span> {% endfor %}</td>{% endfor %}</tr>
+    <tr><td class="muted">Статус, заметка</td>{% for s in items %}<td class="small">{% if s.mark.status %}<span class="tag warn">{{ s.mark.status }}</span>{% endif %} {{ s.mark.note }}</td>{% endfor %}</tr>
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}

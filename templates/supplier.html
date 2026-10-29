@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}{{ s.name }}{% endblock %}
+{% set ctx = 'cat=' ~ p.cat ~ '&city=' ~ (p.city|urlencode) ~ '&net=' ~ p.net %}
+{% block body %}
+<p class="small"><a href="/?{{ ctx }}">← к результатам</a></p>
+<div class="card">
+  <div class="row" style="align-items:flex-start">
+    <div style="flex:1;min-width:240px">
+      <h1 style="margin-bottom:4px">{{ s.name }} <button class="star {{ 'on' if s.mark.starred }}" data-id="{{ s.id }}" aria-pressed="{{ 'true' if s.mark.starred else 'false' }}" title="В шортлист">★</button></h1>
+      <div class="muted">{{ s.city or 'город не указан' }}{% if s.site %} · <a href="{{ s.site }}" target="_blank" rel="noopener">{{ s.site|host }}</a>{% endif %}</div>
+      <div class="row small" style="gap:4px;margin-top:8px">
+        {% for c in cats %}<a class="tag acc" href="/?cat={{ c }}&city={{ p.city|urlencode }}">{{ CAT[c].name }}</a>{% endfor %}
+        {% for src in s.offers|map(attribute='source')|unique %}<span class="tag">{{ src }}</span>{% endfor %}
+      </div>
+    </div>
+    <div style="text-align:right">
+      <div class="big">{{ s.score }}</div><div class="small muted">рейтинг для «{{ CAT[s.cat].name if s.cat else '' }}», {{ p.city }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="grid two" style="margin-top:16px">
+  <div class="grid">
+    <div class="card">
+      <h2>Почему такой рейтинг</h2>
+      <ul class="plain">{% for pts, w in s.why %}<li><span class="pts {{ 'neg' if pts < 0 }}">{{ '%+d'|format(pts) }}</span>{{ w|truncate(140) }}</li>{% endfor %}</ul>
+      {% if s.miss %}<p class="small" style="margin-bottom:0"><span class="muted">Не нашли в открытых источниках:</span>
+        {% for m in s.miss %}<span class="tag warn">{{ m }}</span> {% endfor %}<br><span class="muted">Это вопросы для запроса КП ниже.</span></p>{% endif %}
+    </div>
+
+    <div class="card">
+      <h2>Ключевые данные</h2>
+      <dl class="facts">
+        {% for f in ['price','moq','delivery','docs','geo','phone','email','inn','price_list'] %}
+        <dt>{{ LABELS[f] }}</dt>
+        <dd>{% if s.facts[f] %}
+          {% for v in s.facts[f][:4] %}
+            <div>{% if f == 'price_list' %}<a href="{{ v[0] }}" target="_blank" rel="noopener">{{ v[1] or 'прайс-лист' }}</a>{% elif f == 'phone' %}<a href="tel:{{ v[0] }}">{{ v[0]|tel }}</a>{% elif f == 'email' %}<a href="mailto:{{ v[0] }}">{{ v[0] }}</a>{% else %}{{ v[0] }}{% endif %}
+            {% if v[1] and f != 'price_list' and v[1] != v[0] %}<div class="q">«{{ v[1] }}»</div>{% endif %}
+            <div class="small muted"><a href="{{ v[2] }}" target="_blank" rel="noopener">{{ v[3] }}</a> · {{ v[4] }}</div></div>
+          {% endfor %}
+        {% else %}<span class="none">не найдено</span>{% endif %}</dd>
+        {% endfor %}
+      </dl>
+    </div>
+
+    <div class="card">
+      <h2>Предложения ({{ s.offers|length }})</h2>
+      <ul class="plain">{% for o in s.offers[:15] %}
+        <li><a href="{{ o.url }}" target="_blank" rel="noopener">{{ o.title|truncate(110) }}</a>
+          {% if o.price %}<b>{{ o.price }}</b>{% endif %}
+          <span class="small muted">· {{ CAT[o.category].name }} · {{ o.source }} · {{ o.at }}</span></li>
+      {% endfor %}</ul>
+    </div>
+  </div>
+
+  <div class="grid" style="align-content:start">
+    <div class="card">
+      <h2>Проверка юрлица</h2>
+      {% if s.legal.status %}
+      <dl class="facts">
+        <dt>Статус</dt><dd><span class="tag {{ 'good' if s.legal.status == 'ACTIVE' else 'bad' }}">{{ 'действует' if s.legal.status == 'ACTIVE' else s.legal.status }}</span></dd>
+        {% if s.legal.name %}<dt>Юрлицо</dt><dd>{{ s.legal.name }}</dd>{% endif %}
+        <dt>ИНН</dt><dd>{{ s.inn }}</dd>
+        {% if s.legal.ogrn %}<dt>ОГРН</dt><dd>{{ s.legal.ogrn }}</dd>{% endif %}
+        {% if s.legal.years is not none %}<dt>Возраст</dt><dd>{{ s.legal.years }} лет</dd>{% endif %}
+        {% if s.legal.okved %}<dt>ОКВЭД</dt><dd>{{ s.legal.okved }}</dd>{% endif %}
+        {% if s.legal.address %}<dt>Адрес (ЕГРЮЛ)</dt><dd>{{ s.legal.address }}</dd>{% endif %}
+      </dl>
+      <p class="small muted" style="margin-bottom:0">Источник: ЕГРЮЛ через DaData.</p>
+      {% elif s.inn or s.facts.inn %}<p class="muted">ИНН {{ s.inn or s.facts.inn[0][0] }} найден, проверка в ЕГРЮЛ ещё не запускалась.</p>
+      {% else %}<p class="muted">ИНН не найден в открытых источниках — запросите реквизиты.</p>{% endif %}
+    </div>
+
+    <div class="card">
+      <h2>Статус и заметки</h2>
+      <form method="post" action="/s/{{ s.id }}/mark" class="grid" style="gap:10px">
+        <input type="hidden" name="back" value="/s/{{ s.id }}?{{ ctx }}">
+        <label class="f">Статус
+          <select name="status">{% for st in STATUSES %}<option value="{{ st }}" {{ 'selected' if s.mark.status == st }}>{{ st or '— нет —' }}</option>{% endfor %}</select></label>
+        <label class="f">Заметка<textarea name="note" placeholder="Например: звонили 30.10, ждём прайс до пятницы">{{ s.mark.note }}</textarea></label>
+        <label class="row small"><input type="checkbox" name="starred" value="1" {{ 'checked' if s.mark.starred }}> в шортлисте</label>
+        <button type="submit">Сохранить</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>Запрос КП</h2>
+      <p class="small muted">Письмо собрано из того, чего не хватает в карточке.</p>
+      <label class="f">Тема<input id="subj" value="{{ letter.subject }}"></label>
+      <label class="f" style="margin-top:8px">Текст<textarea id="body" rows="12">{{ letter.body }}</textarea></label>
+      <div class="row" style="margin-top:10px">
+        {% if letter.mailto %}<a class="btn" href="{{ letter.mailto }}">Открыть в почте</a>{% endif %}
+        <button class="ghost" type="button" id="copy">Скопировать</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+document.getElementById('copy').addEventListener('click', async e => {
+  await navigator.clipboard.writeText(document.getElementById('subj').value + '\n\n' + document.getElementById('body').value);
+  e.target.textContent = 'Скопировано';
+});
+</script>
+{% endblock %}
