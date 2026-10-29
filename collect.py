@@ -281,9 +281,15 @@ def crawl(site):
     return [(*p, files if i == 0 else []) for i, p in enumerate(pages)]
 
 
+_extract_lock = threading.Lock()
+
+
 def main_of(html):
-    """Основной контент страницы без меню, боковых блоков и футера (алгоритм класса Readability)."""
-    return trafilatura.extract(html, include_tables=True, favor_recall=True) or ""
+    """Основной контент страницы без меню, боковых блоков и футера (алгоритм класса Readability).
+    По одному потоку: параллельный trafilatura (lxml) портит кучу — «malloc_consolidate(): unaligned fastbin chunk»
+    и SEGV на сервере при обходе из кэша. Разбор быстрый, параллельной остаётся сеть."""
+    with _extract_lock:
+        return trafilatura.extract(html, include_tables=True, favor_recall=True) or ""
 
 
 def enrich_sites(c, log, only_ids=None, again=False):
