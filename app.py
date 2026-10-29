@@ -28,7 +28,18 @@ JOB = {"running": False, "log": [], "title": "", "day": "", "count": 0, "done": 
 # раз в день (повтор найдёт те же сайты), всего не больше LIVE_LIMIT запусков в день.
 # ponytail: счётчики в памяти, сбрасываются при перезапуске сервиса
 LIVE_LIMIT = int(os.environ.get("LIVE_LIMIT", "10"))
-T.env.globals.update(CATS=core.CATEGORIES, CAT=core.CAT, NETS=core.NETS, LABELS=LABELS, STATUSES=STATUSES,
+# группы в списке категорий; внутри — по алфавиту. Новая категория без группы попадёт в «Другое»
+GROUPS = {"Рыба и морепродукты": ["salmon", "seafood", "roe", "nori"],
+          "Мясо, молочка, овощи": ["meat", "dairy", "vegetables"],
+          "Мука и сыры": ["flour", "cheese"],
+          "Бакалея": ["rice", "groats", "oil", "sauces"],
+          "Готовая продукция и напитки": ["desserts", "drinks"],
+          "Упаковка": ["packaging"]}
+abc = lambda c: c["name"].lower().replace("ё", "е")  # noqa: E731
+CAT_GROUPS = [(g, sorted((core.CAT[i] for i in ids if i in core.CAT), key=abc)) for g, ids in GROUPS.items()]
+CAT_GROUPS += [("Другое", sorted((c for c in core.CATEGORIES if not any(c["id"] in v for v in GROUPS.values())),
+                                 key=abc))]
+T.env.globals.update(CATS=sorted(core.CATEGORIES, key=abc), CAT_GROUPS=[g for g in CAT_GROUPS if g[1]], CAT=core.CAT, NETS=core.NETS, LABELS=LABELS, STATUSES=STATUSES,
                      CITIES=core.CITIES, NET_CITIES=core.NET_CITIES, FILTERS=core.FILTERS, LIVE=bool(os.environ.get("YANDEX_API_KEY")))
 
 

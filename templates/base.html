@@ -41,7 +41,7 @@ nav b{font-weight:500;color:var(--ink);background:var(--cyan);border-radius:999p
 .field{display:flex;flex-direction:column;gap:8px;font-size:12px;color:var(--g400);letter-spacing:.02em;min-width:0}
 .field select,.field input{font:inherit;font-size:15px;color:var(--white);background:var(--g800);border:1px solid var(--g700);border-radius:var(--r);height:44px;padding:0 14px;width:100%;letter-spacing:0}
 .field select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%23a4a4a8' stroke-width='1.75'%3E%3Cpath d='m4 6 4 4 4-4'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center;padding-right:40px}
-.field select option{background:var(--white);color:var(--ink)}
+.field select option,.field select optgroup{background:var(--white);color:var(--ink)}
 .field input::placeholder{color:var(--g500)}
 .field select:hover,.field input:hover{border-color:var(--g600)}.field select:focus,.field input:focus{outline:none;border-color:var(--cyan)}
 .seg{display:flex;background:var(--g800);border:1px solid var(--g700);border-radius:var(--r);padding:3px;height:44px}
@@ -158,9 +158,10 @@ function shortN(n) { document.getElementById('shortn').textContent = n || ''; }
 function setStar(id, on) {  // кнопки «В шортлист» и звёздочки у названия в строках выдачи
   document.querySelectorAll(`[data-star="${id}"]`).forEach(b => {
     b.setAttribute('aria-pressed', on ? 'true' : 'false');
-    const t = b.querySelector('.label'); if (t) t.textContent = on ? 'В шортлисте' : 'Добавить в шортлист';
+    const t = b.querySelector('.label'); if (t) t.textContent = on ? 'В шортлисте' : 'В шортлист';
   });
   document.querySelectorAll(`[data-st="${id}"]`).forEach(s => s.hidden = !on);
+  window.onStar?.();
 }
 function toast(t) { const el = document.getElementById('toast'); el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => el.hidden = true, 2200); }
 document.addEventListener('click', async e => {
