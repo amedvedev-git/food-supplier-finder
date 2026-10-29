@@ -87,13 +87,14 @@ nav b{font-weight:500;color:var(--ink);background:var(--cyan);border-radius:999p
 .tablewrap{overflow-x:auto;border:1px solid var(--g200);border-radius:14px;background:var(--white)}
 table{border-collapse:collapse;width:100%}
 th,td{text-align:left;vertical-align:top;padding:14px 16px;border-bottom:1px solid var(--g200)}
-th{font-size:12px;font-weight:500;color:var(--g500);background:var(--g50)}
+th{font-size:14px;font-weight:600;color:var(--g700);background:var(--g50)}
 tr:last-child td{border-bottom:0}
 .empty{padding:56px 24px;text-align:center;color:var(--g600)}
 .empty p{margin:0 0 6px}
 
 /* карточка: факты с источниками */
-.fact{margin-bottom:8px}.fact-v{font-size:15px}
+.fact{margin-bottom:8px}
+.askgap{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0;font-size:14px;color:var(--g500)}.fact-v{font-size:15px}
 details.src{font-size:12px;color:var(--g500)}
 details.src summary{cursor:pointer;list-style:none;display:inline-flex;gap:4px;align-items:center}
 details.src summary::-webkit-details-marker{display:none}
@@ -104,35 +105,54 @@ blockquote{margin:6px 0;padding:8px 12px;background:var(--white);border-radius:8
 ul.why{list-style:none;padding:0;margin:0;font-size:14px}
 ul.why li{display:grid;grid-template-columns:40px 1fr;padding:5px 0;border-bottom:1px dashed var(--g200)}
 ul.why .pts{font-weight:600;color:var(--teal)}ul.why .neg .pts{color:var(--bad)}
-dl.legal{display:grid;grid-template-columns:96px 1fr;gap:6px 12px;margin:0;font-size:14px}dl.legal dt{color:var(--g500)}dl.legal dd{margin:0}
 
-/* карточка поставщика: три колонки */
-.card3{display:grid;grid-template-columns:1.15fr 1fr 1fr}
-.card3>section{padding:24px 28px 28px;min-width:0}
-.card3>section+section{border-left:1px solid var(--g200)}
-.card3 h3{font-size:12px;font-weight:500;color:var(--g500);margin:18px 0 6px}
-.card3 h2+h3{margin-top:0}
 .bigscore{display:flex;align-items:center;gap:14px;margin-bottom:14px}.bigscore p{margin:0;font-size:13px;color:var(--g600)}
 .asks{display:flex;gap:6px;flex-wrap:wrap}
 .kp>label{display:block;font-size:12px;color:var(--g500);margin:12px 0 6px}
-.kp h2+label,.kp>h2+label{margin-top:0}
 .kp input,.kp textarea{font:inherit;font-size:14px;width:100%;border:1px solid var(--g300);border-radius:var(--r);padding:10px 12px;background:var(--white);color:var(--ink)}
 .kp textarea[name=body]{height:240px;resize:vertical;line-height:1.5}
-.kp textarea.note{height:84px;resize:vertical}
 .kp input:focus,.kp textarea:focus{outline:none;border-color:var(--ink)}
 .kp .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
 .letter{position:relative}.letter textarea[name=body]{padding-right:60px;display:block}
 .letter .copy{position:absolute;top:8px;right:18px;width:34px;height:34px;display:grid;place-items:center;border:1px solid var(--g200);border-radius:8px;background:var(--white);color:var(--g600);cursor:pointer}
 .letter .copy:hover{border-color:var(--ink);color:var(--ink)}
-.markform{margin-top:28px;padding-top:24px;border-top:1px solid var(--g200)}
-.kpform{margin-top:28px;padding-top:24px;border-top:1px solid var(--g200)}.kpform p{margin:0 0 12px}
 .kpgrid{display:grid;gap:10px}.kpgrid label{display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--g500)}
 .kpdel{font:inherit;font-size:12px;color:var(--bad);background:none;border:0;padding:0;margin-top:4px;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
 .status{display:flex;flex-wrap:wrap;gap:6px}
 .status input{position:absolute;opacity:0;pointer-events:none}
 .status .chip{height:32px;font-size:13px}
 .status input:focus-visible+.chip{outline:2px solid var(--teal);outline-offset:2px}
-@media (max-width:1100px){.card3{grid-template-columns:1fr}.card3>section+section{border-left:0;border-top:1px solid var(--g200)}}
+
+/* карточка поставщика: заголовки раздела — тёмные и крупнее, подписи полей — средние, значения — основной текст */
+.cv{background:var(--g100);font-size:15px}
+.cv h3{font-size:16px;font-weight:600;color:var(--ink);margin:24px 0 10px;padding-bottom:8px;border-bottom:1px solid var(--g200)}
+.cv section>h3:first-child,.cv aside>h3:first-child{margin-top:0}
+.cv h4{font-size:13px;font-weight:600;color:var(--g700);margin:18px 0 8px}
+.cv .lbl{font-size:13px;font-weight:600;color:var(--g700);margin:0 0 6px}
+.cv .rows{display:grid;grid-template-columns:150px 1fr;gap:10px 16px}
+.cv .row-l{font-size:13px;font-weight:600;color:var(--g700);padding-top:2px}
+.cv .row-v .fact:last-child{margin-bottom:0}
+.cv .note-src{font-size:12px;color:var(--g500);margin:8px 0 0}
+.cv details.more{margin-top:18px;border-top:1px solid var(--g200);padding-top:14px}
+.cv details.more>summary{cursor:pointer;font-size:14px;font-weight:600;color:var(--ink);list-style:none;display:flex;gap:8px;align-items:center}
+.cv details.more>summary::-webkit-details-marker{display:none}
+.cv details.more>summary::before{content:"";width:7px;height:7px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(-45deg);transition:transform .15s}
+.cv details.more[open]>summary::before{transform:rotate(45deg)}
+.cv details.more>summary:hover{color:var(--teal)}
+.cv .kp label{display:block;font-size:13px;font-weight:600;color:var(--g700);margin:12px 0 6px}
+.cv .kp{margin-top:12px}.cv .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.cv .markform,.cv .kpform{margin-top:20px;padding-top:0;border-top:0}
+.cv textarea.note,.cv .kpform input{font:inherit;font-size:14px;width:100%;border:1px solid var(--g300);border-radius:var(--r);padding:10px 12px;background:var(--white);color:var(--ink)}
+.cv textarea.note{height:84px;resize:vertical}
+.cv textarea.note:focus,.cv .kpform input:focus{outline:none;border-color:var(--ink)}
+.cv .bigscore{margin-top:14px}
+/* раскладка: факты | действия */
+.cv{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(300px,1fr)}
+.cv .facts-col{padding:24px 28px 28px}
+.cv .act-col{padding:24px 28px 28px;background:var(--white);border-left:1px solid var(--g200)}
+.cv .act-col .actions .btn{flex:1;justify-content:center}
+@media (max-width:1100px){.cv{grid-template-columns:1fr}.cv .act-col{border-left:0;border-top:1px solid var(--g200)}
+  .cv .rows{grid-template-columns:1fr;gap:2px 0}.cv .row-v{margin-bottom:10px}}
 
 .toast{position:fixed;top:20px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--white);padding:10px 16px;border-radius:10px;font-size:14px;z-index:20;transition:opacity .2s}
 .toast[hidden]{display:block;opacity:0;pointer-events:none}
@@ -150,6 +170,7 @@ main{padding-bottom:96px}
       <a href="/" class="{{ 'on' if request.url.path == '/' }}">Поиск</a>
       <a href="/shortlist?city={{ p.city|urlencode }}" class="{{ 'on' if request.url.path == '/shortlist' }}">Шортлист<b id="shortn">{{ shortlist_n() or '' }}</b></a>
       <a href="/about" class="{{ 'on' if request.url.path == '/about' }}">Как это работает</a>
+      <a href="/deck" target="_blank" rel="noopener">Презентация</a>
     </nav>
   </div>
   {% block band %}{% endblock %}
@@ -193,13 +214,13 @@ document.addEventListener('submit', e => {
   if (!f) return;
   e.preventDefault();
   if (![...f.querySelectorAll('input')].some(i => i.value.trim())) return toast('Заполните хотя бы одно поле');
-  kpSave(f.action, new FormData(f), f.dataset.reload, f.closest('.card3')).then(() => toast('Добавлено в карточку'));
+  kpSave(f.action, new FormData(f), f.dataset.reload, f.closest('.cv')).then(() => toast('Добавлено в карточку'));
 });
 document.addEventListener('click', e => {
   const b = e.target.closest('.kpdel');
   if (!b) return;
   const body = new FormData(); body.append('field', b.dataset.field); body.append('delete', b.dataset.value);
-  kpSave(b.dataset.kp, body, b.dataset.reload, b.closest('.card3')).then(() => toast('Удалено из карточки'));
+  kpSave(b.dataset.kp, body, b.dataset.reload, b.closest('.cv')).then(() => toast('Удалено из карточки'));
 });
 // статус и заметка сохраняются сразу, без перезагрузки
 document.addEventListener('change', async e => {

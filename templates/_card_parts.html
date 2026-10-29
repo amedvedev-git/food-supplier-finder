@@ -1,0 +1,106 @@
+{# Части карточки поставщика. Импорт: {% import "_card_parts.html" as part with context %} — нужны s, p, cats, letter, uid #}
+{% from "_icons.html" import icon %}
+{% set SRC = {'yandex': 'выдача Яндекса', 'сайт': 'сайт поставщика', 'прайс': 'прайс-лист поставщика', 'productcenter': 'каталог productcenter.ru', 'КП': 'ответ на КП, внёс закупщик', 'Росаккредитация': 'реестр деклараций Росаккредитации'} %}
+{% set reload = '/s/' ~ s.id ~ '/panel?cat=' ~ s.cat ~ '&city=' ~ (p.city|urlencode) ~ '&net=' ~ p.net %}
+
+{% macro ask() %}<p class="askgap"><span class="tag warn">спросим в КП</span>нет в открытых источниках</p>{% endmacro %}
+
+{% macro facts(k, limit=4) -%}
+{% set arr = (s.facts[k] or [])[:limit] %}
+{% if not arr and k in ('phone', 'email') %}<span class="gap">Не найдено</span>
+{% elif not arr %}{{ ask() }}{% endif %}
+{% for v in arr %}<div class="fact"><div class="fact-v">
+  {%- if k == 'phone' %}<a href="tel:{{ v[0] }}">{{ v[0]|tel }}</a>
+  {%- elif k == 'email' %}<a href="mailto:{{ v[0] }}">{{ v[0] }}</a>
+  {%- elif k == 'price_list' %}<a href="{{ v[0] }}" target="_blank" rel="noopener">{{ v[1] or 'прайс-лист' }}</a>
+  {%- else %}{{ v[0] }}{% endif %}</div>
+  {% if k not in ('phone', 'email') %}<details class="src"><summary>{{ SRC.get(v[3], v[3]) }} · {{ v[4][:10] }}</summary>
+    {% if v[1] and k != 'price_list' and v[1] != v[0] and v[3] != 'КП' %}<blockquote>{{ v[1] }}</blockquote>{% endif %}
+    {% if v[2] %}<a href="{{ v[2] }}" target="_blank" rel="noopener">{{ v[2]|host }}{{ icon('external', 'sm') }}</a>{% endif %}
+    {% if v[3] == 'КП' %}<button class="kpdel" type="button" data-field="{{ k }}" data-value="{{ v[0] }}" data-kp="/s/{{ s.id }}/kp" data-reload="{{ reload }}">Удалить</button>{% endif %}</details>{% endif %}</div>
+{% endfor %}
+{%- endmacro %}
+
+{# строки «подпись — значения» для блока условий #}
+{% macro rows(items) %}<div class="rows">{% for k, label, limit in items if k not in ('price_list', 'decl') or s.facts[k] %}
+  <div class="row-l">{{ label }}</div><div class="row-v">{{ facts(k, limit) }}</div>{% endfor %}</div>{% endmacro %}
+
+{% macro conditions() %}{{ rows([('delivery', 'Доставка', 6), ('moq', 'Минимальный заказ', 4), ('price', 'Цена', 4), ('price_list', 'Прайс-лист', 2)]) }}{% endmacro %}
+{% macro documents() %}{{ rows([('decl', 'Декларации в реестре', 5), ('docs', 'Упомянуты на сайте', 4)]) }}{% endmacro %}
+{% macro contacts() %}<div class="rows">
+  <div class="row-l">Телефон</div><div class="row-v">{{ facts('phone', 2) }}</div>
+  <div class="row-l">Email</div><div class="row-v">{{ facts('email', 2) }}</div>
+  {% if s.site %}<div class="row-l">Сайт</div><div class="row-v"><a href="{{ s.site }}" target="_blank" rel="noopener">{{ s.site|host }}{{ icon('external', 'sm') }}</a></div>{% endif %}
+</div>{% endmacro %}
+
+{% macro legal() %}<div class="rows">
+{% if s.legal.status %}
+  <div class="row-l">Статус</div><div class="row-v"><span class="tag {{ 'good' if s.legal.status == 'ACTIVE' else 'bad' }}">{{ LEGAL_RU.get(s.legal.status, s.legal.status) }}</span>{% if s.legal.years is not none %} · {{ s.legal.years }} {{ plural(s.legal.years, 'год', 'года', 'лет') }} на рынке{% endif %}</div>
+  {% if s.legal.name %}<div class="row-l">Юрлицо</div><div class="row-v">{{ s.legal.name }}</div>{% endif %}
+  <div class="row-l">ИНН</div><div class="row-v">{{ s.inn }}{% if s.legal.ogrn %} · ОГРН {{ s.legal.ogrn }}{% endif %}</div>
+  {% if s.legal.okved %}<div class="row-l">ОКВЭД</div><div class="row-v">{{ s.legal.okved }}{% if kind(s) %} — {{ kind(s)[0] }}{% endif %}</div>{% endif %}
+  {% if s.legal.address %}<div class="row-l">Адрес</div><div class="row-v">{{ s.legal.address }}</div>{% endif %}
+  <div class="row-l"></div><div class="row-v note-src">Источник: ЕГРЮЛ через DaData</div>
+{% else %}
+  <div class="row-l">ИНН</div><div class="row-v">{% if s.inn or s.facts.inn %}{{ s.inn or s.facts.inn[0][0] }} · проверка в ЕГРЮЛ не проводилась{% else %}{{ ask() }}{% endif %}</div>
+{% endif %}
+</div>{% endmacro %}
+
+{% macro othercats() %}{% if cats|length > 1 %}<div class="rows"><div class="row-l">Также поставляет</div><div class="row-v asks">{% for c in cats[1:] %}<a class="tag" href="/?cat={{ c }}&city={{ p.city|urlencode }}">{{ CAT[c].name }}</a>{% endfor %}</div></div>{% endif %}{% endmacro %}
+
+{% macro rating(open=False) %}
+<details class="more" {{ 'open' if open }}><summary>Почему {{ s.score }} {{ plural(s.score, 'балл', 'балла', 'баллов') }} из 100</summary>
+  <div class="bigscore"><span class="score lg {{ score_cls(s.score) }}">{{ s.score|px }}</span>
+    <p>из 100 для категории<br>«{{ CAT[s.cat].name if s.cat else '' }}», {{ p.city }}</p></div>
+  <ul class="why">{% for pts, w in s.why %}<li class="{{ 'neg' if pts < 0 }}"><span class="pts">{{ '%+d'|format(pts) }}</span><span>{{ w|telify }}</span></li>{% endfor %}</ul>
+</details>
+{% endmacro %}
+
+{% macro asks() %}{% if s.miss %}<div class="asks">{% for m in s.miss %}<span class="tag warn">{{ m }}</span>{% endfor %}</div>{% endif %}{% endmacro %}
+
+{% macro actions() %}
+<div class="actions">
+  {% if letter.mailto %}<a class="btn" href="{{ letter.mailto }}">{{ icon('mail') }}Открыть в почте</a>
+  {% else %}<span class="btn" aria-disabled="true" title="Email не найден">{{ icon('mail') }}Нет email</span>{% endif %}
+  <button class="btn ghost star" type="button" data-star="{{ s.id }}" aria-pressed="{{ 'true' if s.mark.starred else 'false' }}">{{ icon('star') }}<span class="label">{{ 'В шортлисте' if s.mark.starred else 'В шортлист' }}</span></button>
+</div>
+{% endmacro %}
+
+{% macro letterbox() %}
+<div class="kp">
+  <label for="subj-{{ uid }}">Тема</label><input id="subj-{{ uid }}" name="subject" value="{{ letter.subject }}">
+  <label for="body-{{ uid }}">Письмо — собрано из того, чего нет в карточке</label>
+  <div class="letter"><textarea id="body-{{ uid }}" name="body">{{ letter.body }}</textarea>
+    <button class="copy" type="button" data-copy title="Скопировать тему и письмо" aria-label="Скопировать тему и письмо">{{ icon('copy') }}</button></div>
+</div>
+{% endmacro %}
+
+{% macro markform() %}
+<form class="markform" action="/s/{{ s.id }}/mark" method="post" onsubmit="return false">
+  <h4>Статус работы</h4>
+  <div class="status">{% for st in STATUSES %}<input type="radio" name="status" value="{{ st }}" id="st-{{ uid }}-{{ loop.index }}" {{ 'checked' if (s.mark.status or '') == st }}><label class="chip" for="st-{{ uid }}-{{ loop.index }}">{{ st or 'Нет' }}</label>{% endfor %}</div>
+  <h4>Заметка</h4>
+  <textarea name="note" class="note" placeholder="Например: звонили 30.10, ждём прайс до пятницы">{{ s.mark.note }}</textarea>
+  <p class="note-src">Сохраняется сразу; поставщик со статусом попадает в шортлист.</p>
+</form>
+{% endmacro %}
+
+{% macro kpform() %}
+<form class="kpform" action="/s/{{ s.id }}/kp" method="post" data-reload="{{ reload }}">
+  <p class="note-src">Что поставщик ответил на запрос — станет фактом с пометкой «ответ на КП», зажжёт огонёк и уберёт вопрос из письма.</p>
+  <div class="kpgrid">
+    {% for k, label, ph in [('price', 'Цена', '1 250 ₽/кг, лосось 4–5 кг'), ('moq', 'Мин. заказ', 'от 20 кг'), ('delivery', 'Доставка', 'по городу 2 раза в неделю, бесплатно от 15 000 ₽'), ('docs', 'Документы', 'декларации, ветсвидетельства в Меркурии')] %}
+    <label>{{ label }}<input name="{{ k }}" maxlength="200" placeholder="{{ ph }}" autocomplete="off"></label>{% endfor %}
+  </div>
+  <div class="actions"><button class="btn ghost" type="submit">Добавить в карточку</button></div>
+</form>
+{% endmacro %}
+
+{# плитка главного: значение или «спросим в КП» #}
+{% macro key(k, label, value, sub='') %}
+<div class="key {{ 'ask' if not value }}"><div class="k">{{ label }}</div>
+  {% if value %}<div class="v">{{ value }}</div>{% if sub %}<div class="sub">{{ sub }}</div>{% endif %}
+  {% else %}<div class="v"><span class="tag warn">спросим в КП</span></div>{% endif %}</div>
+{% endmacro %}
+
+{% macro docs_short() %}{% if s.facts.decl %}{{ s.facts.decl|length }} {{ plural(s.facts.decl|length, 'декларация', 'декларации', 'деклараций') }} в реестре{% elif s.facts.docs %}{{ s.facts.docs|map(attribute=0)|join(', ')|truncate(48) }}{% endif %}{% endmacro %}

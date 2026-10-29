@@ -26,7 +26,7 @@
   <thead><tr><th></th>{% for s in items %}<th><a class="name" href="/s/{{ s.id }}?{{ ctx }}">{{ s.name }}</a><div class="meta">{{ legal_line(s) }}</div></th>{% endfor %}</tr></thead>
   <tbody>
     <tr><td>Рейтинг</td>{% for s in items %}<td><div class="scrow"><span class="score {{ score_cls(s.score) }}">{{ s.score|px }}</span>{% if s.score == best %}<span class="tag good">выше всех</span>{% endif %}</div></td>{% endfor %}</tr>
-    <tr><td>Что известно</td>{% for s in items %}<td><span class="leds">{% for key, label in COVERAGE %}<span class="led {{ 'on' if has(s, key) }}" title="{{ label }}"></span>{% endfor %}</span><div class="small muted" style="margin-top:6px">{{ known(s) }} из 8 · {{ zone(s) }}</div></td>{% endfor %}</tr>
+    <tr><td>Что известно</td>{% for s in items %}<td><span class="leds">{% for key, label in COVERAGE %}<span class="led {{ 'on' if has(s, key) }}" title="{{ label }}"></span>{% endfor %}</span></td>{% endfor %}</tr>
     {% for f in ['delivery', 'moq', 'price', 'docs'] if items|map(attribute='facts')|map(attribute=f)|select|list %}
     <tr><td>{{ LABELS[f] }}</td>{% for s in items %}<td>{% if f == 'delivery' %}{{ allv(s, 'delivery') or '' }}{% else %}{% for v in (s.facts[f] or [])[:3] %}<div>{{ v[0] }}</div>{% endfor %}{% endif %}{% if not s.facts[f] %}<span class="gap">нет данных</span>{% endif %}</td>{% endfor %}</tr>
     {% endfor %}

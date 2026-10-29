@@ -58,18 +58,37 @@ def db():
 
 def params(request: Request) -> dict:
     p = request.query_params
-    return make_params(p.get("net", ""), p.get("cat", ""), p.get("city"), p.get("q", ""), p.getlist("only"))
+    return make_params(p.get("net", ""), p.get("cat", ""), p.get("city"), p.get("q", ""), p.getlist("only"),
+                       p.get("kind", ""), p.get("geo", "reach"))
 
 
-def make_params(net="", cat="", city=None, q="", only=()) -> dict:
+def make_params(net="", cat="", city=None, q="", only=(), kind="", geo="reach") -> dict:
     net = net if net in core.NETS else ""
     cities = core.NET_CITIES.get(net, core.CITIES)
     city = city if city in cities else cities[0]  # база собрана только по городам сетей
-    return {"net": net, "cat": cat if cat in core.CAT else "", "city": city, "q": (q or "").strip(), "only": list(only)}
+    return {"net": net, "cat": cat if cat in core.CAT else "", "city": city, "q": (q or "").strip(), "only": list(only),
+            "kind": kind if kind in KINDS else "", "geo": geo if geo in GEO else "reach"}
 
 
 def run_search(p):
-    return core.search(db(), p["cat"] or None, p["city"], p["net"] or None, p["q"], p["only"])
+    rows = core.search(db(), p["cat"] or None, p["city"], p["net"] or None, p["q"], p["only"])
+    return [s for s in rows if GEO[p.get("geo", "all")][1](s) and (not p.get("kind") or kind_key(s) == p["kind"])]
+
+
+# география выдачи: город меняет состав списка, а не только порядок. По умолчанию — кто возит в город
+_REACH = ("Работает в регионе", "Доставляет в регион", "Доставка по России")
+GEO = {"local": ("Местные", lambda s: core.FILTERS["local"][1](s)),
+       "reach": ("Возят в город", lambda s: any(p > 0 and t.startswith(_REACH) for p, t in s["why"])),
+       "all": ("Все", lambda s: True)}
+
+
+# тип компании по ОКВЭД из ЕГРЮЛ: ключ фильтра → подпись чипа
+KINDS = {"опт": "Опт", "производитель": "Производители", "розница": "Розница", "общепит": "Общепит",
+         "нет данных": "Не определён"}
+
+
+def kind_key(s):
+    return (kind(s) or ("нет данных",))[0]
 
 
 def first(s, field):
@@ -151,7 +170,8 @@ def shortlist_n(c=None):
     return (c or db()).execute("select count(*) from marks where starred=1 or status!=''").fetchone()[0]
 
 
-T.env.globals.update(first=first, allv=allv, has=has, zone=zone, kind=kind, plural=plural, legal_line=legal_line,
+T.env.globals.update(first=first, allv=allv, has=has, zone=zone, kind=kind, KINDS=KINDS, GEO=GEO,
+                     plural=plural, legal_line=legal_line,
                      COVERAGE=COVERAGE, LEGAL_RU=LEGAL_RU, known=lambda s: sum(has(s, k) for k, _ in COVERAGE),
                      shortlist_n=shortlist_n)
 # у Pixelify Sans «5» похожа на «S»: рисуем свою — зеркальная «2» с прямой верхней перекладиной.
@@ -176,11 +196,15 @@ T.env.globals["score_cls"] = lambda n: "" if n >= 75 else "mid" if n >= 55 else 
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request):
     p = params(request)
-    found = run_search({**p, "only": []}) if (p["cat"] or p["q"] or p["net"]) else []
-    rows = [s for s in found if all(core.FILTERS[k][1](s) for k in p["only"] if k in core.FILTERS)]
-    counts = {k: sum(f(s) for s in found) for k, (_, f) in core.FILTERS.items()}  # счётчики на чипах фильтров
+    found = run_search({**p, "only": [], "kind": "", "geo": "all"}) if (p["cat"] or p["q"] or p["net"]) else []
+    geos = {k: sum(f(s) for s in found) for k, (_, f) in GEO.items()}  # счётчики меняются с городом
+    near = [s for s in found if GEO[p["geo"]][1](s)]
+    pre = [s for s in near if all(core.FILTERS[k][1](s) for k in p["only"] if k in core.FILTERS)]
+    rows = [s for s in pre if not p["kind"] or kind_key(s) == p["kind"]]
+    counts = {k: sum(f(s) for s in near) for k, (_, f) in core.FILTERS.items()}  # счётчики на чипах фильтров
+    kinds = {k: sum(kind_key(s) == k for s in pre) for k in KINDS}  # тип компании — после фильтров выше
     return T.TemplateResponse(request, "index.html", {"p": p, "rows": rows, "found": len(found), "counts": counts,
-                                                      "job": JOB})
+                                                      "kinds": kinds, "geos": geos, "job": JOB})
 
 
 def card_context(p, sid):
@@ -303,7 +327,17 @@ def export(request: Request, what: str = "search"):
     buf = io.BytesIO()
     wb.save(buf)
     return Response(buf.getvalue(), media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    headers={"Content-Disposition": "attachment; filename=suppliers.xlsx"})
+                    headers={"Content-Disposition": "attachment; filename=suppliers.xlsx; "
+                             "filename*=UTF-8''" + quote(export_name(p, what))})
+
+
+def export_name(p, what):
+    """«Поставщики_Лосось и форель_Екатеринбург_2026-10-29.xlsx»: что, где и когда выгружено."""
+    head = "Шортлист" if what == "shortlist" else "Поставщики"
+    cat = core.CAT[p["cat"]]["name"] if p["cat"] and what != "shortlist" else ""
+    kind_label = KINDS[p["kind"]] if p.get("kind") and what != "shortlist" else ""
+    parts = [head, cat, kind_label, p["city"], core.now()[:10]]
+    return re.sub(r'[\\/:*?"<>|]', "", "_".join(x for x in parts if x)) + ".xlsx"
 
 
 @app.post("/live")
@@ -337,6 +371,14 @@ def live(cat: str = Form(...), city: str = Form("Екатеринбург"), q: 
 @app.get("/live/status")
 def live_status():
     return JOB
+
+
+@app.get("/deck", response_class=HTMLResponse)
+def deck():
+    """Презентация проекта: templates/deck.html собирает deck/mkdeck.py (движок client-deck, фрагмент без doctype)."""
+    return HTMLResponse('<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" '
+                        'content="width=device-width, initial-scale=1"></head><body>'
+                        + (core.ROOT / "templates" / "deck.html").read_text(encoding="utf-8") + "</body></html>")
 
 
 @app.get("/about", response_class=HTMLResponse)
@@ -390,16 +432,18 @@ def list_categories() -> dict[str, Any]:
     return {"categories": [{"group": g, "id": c["id"], "name": c["name"], "networks": c["nets"]}
                            for g, cats in CAT_GROUPS for c in cats],
             "networks": core.NETS, "cities": core.NET_CITIES,
-            "filters": {k: label for k, (label, _) in core.FILTERS.items()}}
+            "filters": {k: label for k, (label, _) in core.FILTERS.items() if k != "local"},
+            "geography": {k: label for k, (label, _) in GEO.items()}}
 
 
 @MCP.tool(annotations=RO, structured_output=True)
 def search_suppliers(category: str, city: str = "Екатеринбург", network: str = "", only: list[str] | None = None,
-                     query: str = "", limit: int = 10) -> dict[str, Any]:
+                     query: str = "", geography: str = "reach", limit: int = 10) -> dict[str, Any]:
     """Поставщики категории в городе, лучшие по рейтингу 0–100 сверху.
-    only — фильтры из list_categories (local, price, contacts, docs); query — слово в названии или товаре."""
+    geography: reach — работают в городе или возят туда (по умолчанию), local — только местные, all — все.
+    only — фильтры из list_categories (price, contacts, docs); query — слово в названии или товаре."""
     _need(category)
-    p = make_params(network, category, city, query, only or [])
+    p = make_params(network, category, city, query, only or [], geo=geography)
     rows = run_search(p)
     return {"category": core.CAT[category]["name"], "city": p["city"], "found": len(rows),
             "suppliers": [_brief(s, p) for s in rows[:max(1, min(limit, 30))]]}

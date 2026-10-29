@@ -1,80 +1,22 @@
-{% from "_icons.html" import icon %}
-{% set SRC = {'yandex': 'выдача Яндекса', 'сайт': 'сайт поставщика', 'прайс': 'прайс-лист поставщика', 'productcenter': 'каталог productcenter.ru', 'КП': 'ответ на КП, внёс закупщик', 'Росаккредитация': 'реестр деклараций Росаккредитации'} %}
-{% set reload = '/s/' ~ s.id ~ '/panel?cat=' ~ s.cat ~ '&city=' ~ (p.city|urlencode) ~ '&net=' ~ p.net %}
-{% macro facts(k, limit=4) -%}
-{% set arr = (s.facts[k] or [])[:limit] %}
-{% if not arr %}<span class="gap">Нет в открытых источниках — спросим в запросе КП</span>{% endif %}
-{% for v in arr %}<div class="fact"><div class="fact-v">
-  {%- if k == 'phone' %}<a href="tel:{{ v[0] }}">{{ v[0]|tel }}</a>
-  {%- elif k == 'email' %}<a href="mailto:{{ v[0] }}">{{ v[0] }}</a>
-  {%- elif k == 'price_list' %}<a href="{{ v[0] }}" target="_blank" rel="noopener">{{ v[1] or 'прайс-лист' }}</a>
-  {%- else %}{{ v[0] }}{% endif %}</div>
-  <details class="src"><summary>{{ SRC.get(v[3], v[3]) }} · {{ v[4][:10] }}</summary>
-    {% if v[1] and k != 'price_list' and v[1] != v[0] and v[3] != 'КП' %}<blockquote>{{ v[1] }}</blockquote>{% endif %}
-    {% if v[2] %}<a href="{{ v[2] }}" target="_blank" rel="noopener">{{ v[2]|host }}{{ icon('external', 'sm') }}</a>{% endif %}
-    {% if v[3] == 'КП' %}<button class="kpdel" type="button" data-field="{{ k }}" data-value="{{ v[0] }}" data-kp="/s/{{ s.id }}/kp" data-reload="{{ reload }}">Удалить</button>{% endif %}</details></div>
-{% endfor %}
-{%- endmacro %}
-<div class="card3" role="region" aria-label="Карточка: {{ s.name }}">
-  <section>
-    <h2>Условия поставки</h2>
-    <h3>Доставка</h3>{{ facts('delivery', 6) }}
-    <h3>Минимальный заказ</h3>{{ facts('moq') }}
-    <h3>Цена</h3>{{ facts('price') }}
-    {% if s.facts.price_list %}<h3>Прайс-лист</h3>{{ facts('price_list', 2) }}{% endif %}
-    {% if s.facts.decl %}<h3>Декларации — реестр Росаккредитации</h3>{{ facts('decl', 5) }}{% endif %}
-    <h3>{{ 'Документы, упомянутые на сайте' if s.facts.decl else 'Документы' }}</h3>{{ facts('docs') }}
-    <h3>Контакты</h3>{{ facts('phone', 2) }}{{ facts('email', 2) }}
-    {% if s.site %}<div class="fact"><a href="{{ s.site }}" target="_blank" rel="noopener">{{ s.site|host }}{{ icon('external', 'sm') }}</a></div>{% endif %}
+{# Карточка поставщика: слева факты по разделам на одной сетке «подпись — значение», справа действия.
+   Части — в _card_parts.html; раскрывается в строке выдачи (/s/{id}/panel) и на отдельной странице (/s/{id}) #}
+{% set uid = uid or s.id %}
+{% import "_card_parts.html" as part with context %}
+<div class="cv" role="region" aria-label="Карточка: {{ s.name }}">
+  <section class="facts-col">
+    <h3>Условия поставки</h3>{{ part.conditions() }}
+    <h3>Документы</h3>{{ part.documents() }}
+    <h3>Юрлицо</h3>{{ part.legal() }}
+    <h3>Контакты</h3>{{ part.contacts() }}
+    {% if cats|length > 1 %}<h3>Другие категории</h3>{{ part.othercats() }}{% endif %}
   </section>
-  <section>
-    <h2>Из чего сложился рейтинг</h2>
-    <div class="bigscore"><span class="score lg {{ score_cls(s.score) }}">{{ s.score|px }}</span>
-      <p>из 100 для категории «{{ CAT[s.cat].name if s.cat else '' }}», {{ p.city }}</p></div>
-    <ul class="why">{% for pts, w in s.why %}<li class="{{ 'neg' if pts < 0 }}"><span class="pts">{{ '%+d'|format(pts) }}</span><span>{{ w|telify }}</span></li>{% endfor %}</ul>
-    {% if s.miss %}<h3>Спросим в запросе КП</h3><div class="asks">{% for m in s.miss %}<span class="tag warn">{{ m }}</span>{% endfor %}</div>{% endif %}
-    <h3>Юрлицо</h3>
-    {% if s.legal.status %}
-    <dl class="legal">
-      <dt>Статус</dt><dd><span class="tag {{ 'good' if s.legal.status == 'ACTIVE' else 'bad' }}">{{ LEGAL_RU.get(s.legal.status, s.legal.status) }}</span></dd>
-      {% if s.legal.name %}<dt>Юрлицо</dt><dd>{{ s.legal.name }}</dd>{% endif %}
-      <dt>ИНН</dt><dd>{{ s.inn }}</dd>
-      {% if s.legal.ogrn %}<dt>ОГРН</dt><dd>{{ s.legal.ogrn }}</dd>{% endif %}
-      {% if s.legal.years is not none %}<dt>На рынке</dt><dd>{{ s.legal.years }} {{ plural(s.legal.years, 'год', 'года', 'лет') }}</dd>{% endif %}
-      {% if s.legal.okved %}<dt>ОКВЭД</dt><dd>{{ s.legal.okved }}{% if kind(s) %} — {{ kind(s)[0] }}{% endif %}</dd>{% endif %}
-      {% if s.legal.address %}<dt>Адрес</dt><dd>{{ s.legal.address }}</dd>{% endif %}
-    </dl>
-    <p class="small muted">Источник: ЕГРЮЛ через DaData.</p>
-    {% elif s.inn or s.facts.inn %}<p class="gap">ИНН {{ s.inn or s.facts.inn[0][0] }} найден, проверка в ЕГРЮЛ не проводилась.</p>
-    {% else %}<p class="gap">ИНН не найден — запросим реквизиты в КП.</p>{% endif %}
-    {% if cats|length > 1 %}<h3>Другие категории поставщика</h3><div class="asks">{% for c in cats[1:] %}<a class="tag" href="/?cat={{ c }}&city={{ p.city|urlencode }}">{{ CAT[c].name }}</a>{% endfor %}</div>{% endif %}
-  </section>
-  <section class="kp">
-    <h2>Запрос коммерческого предложения</h2>
-    <label for="subj-{{ s.id }}">Тема</label><input id="subj-{{ s.id }}" name="subject" value="{{ letter.subject }}">
-    <label for="body-{{ s.id }}">Письмо — собрано из того, чего нет в карточке</label>
-    <div class="letter"><textarea id="body-{{ s.id }}" name="body">{{ letter.body }}</textarea>
-      <button class="copy" type="button" data-copy title="Скопировать тему и письмо" aria-label="Скопировать тему и письмо">{{ icon('copy') }}</button></div>
-    <div class="actions">
-      {% if letter.mailto %}<a class="btn" href="{{ letter.mailto }}">{{ icon('mail') }}Открыть в почте</a>
-      {% else %}<span class="btn" aria-disabled="true" title="Email не найден">{{ icon('mail') }}Нет email</span>{% endif %}
-      <button class="btn ghost star" type="button" data-star="{{ s.id }}" aria-pressed="{{ 'true' if s.mark.starred else 'false' }}">{{ icon('star') }}<span class="label">{{ 'В шортлисте' if s.mark.starred else 'В шортлист' }}</span></button>
-    </div>
-    <form class="markform" action="/s/{{ s.id }}/mark" method="post" onsubmit="return false">
-      <h2>Статус работы</h2>
-      <div class="status">{% for st in STATUSES %}<input type="radio" name="status" value="{{ st }}" id="st-{{ s.id }}-{{ loop.index }}" {{ 'checked' if (s.mark.status or '') == st }}><label class="chip" for="st-{{ s.id }}-{{ loop.index }}">{{ st or 'Нет' }}</label>{% endfor %}</div>
-      <h3>Заметка</h3>
-      <textarea name="note" class="note" placeholder="Например: звонили 30.10, ждём прайс до пятницы">{{ s.mark.note }}</textarea>
-      <p class="small muted">Статус и заметка сохраняются сразу; поставщик со статусом тоже попадает в шортлист.</p>
-    </form>
-    <form class="kpform" action="/s/{{ s.id }}/kp" method="post" data-reload="{{ reload }}">
-      <h2>Ответ поставщика на КП</h2>
-      <p class="small muted">Что поставщик ответил на запрос — добавится в карточку как факт с пометкой «ответ на КП», зажжёт огонёк и уберёт вопрос из письма.</p>
-      <div class="kpgrid">
-        {% for k, label, ph in [('price', 'Цена', '1 250 ₽/кг, лосось 4–5 кг'), ('moq', 'Мин. заказ', 'от 20 кг'), ('delivery', 'Доставка', 'по городу 2 раза в неделю, бесплатно от 15 000 ₽'), ('docs', 'Документы', 'декларации, ветсвидетельства в Меркурии')] %}
-        <label>{{ label }}<input name="{{ k }}" maxlength="200" placeholder="{{ ph }}" autocomplete="off"></label>{% endfor %}
-      </div>
-      <div class="actions"><button class="btn ghost" type="submit">Добавить в карточку</button></div>
-    </form>
-  </section>
+  <aside class="act-col">
+    <h3>Действия</h3>
+    {% if s.miss %}<p class="lbl">Спросим в письме</p>{{ part.asks() }}{% endif %}
+    {{ part.actions() }}
+    <details class="more"><summary>Письмо-запрос КП</summary>{{ part.letterbox() }}</details>
+    {{ part.markform() }}
+    <details class="more"><summary>Внести ответ поставщика на КП</summary>{{ part.kpform() }}</details>
+    {{ part.rating() }}
+  </aside>
 </div>
