@@ -47,7 +47,11 @@ def first(s, field):
 
 
 def allv(s, field):
-    return ", ".join(dict.fromkeys(v[0] for v in s["facts"].get(field) or []))
+    vals = list(dict.fromkeys(v[0] for v in s["facts"].get(field) or []))
+    if field == "delivery":  # одинаковый порядок признаков во всех строках — колонку можно читать сверху вниз
+        rank = lambda v: next((i for i, k in enumerate(core.DELIVERY_ORDER) if v.startswith(k)), 99)  # noqa: E731
+        vals.sort(key=rank)
+    return ", ".join(vals)
 
 
 def focus(s, cats, city):
