@@ -30,14 +30,14 @@ h2{font-size:13px;font-weight:500;color:var(--g500);margin:0 0 12px;letter-spaci
 .mark i{background:var(--ink);border-radius:1px}.mark i:nth-child(2),.mark i:nth-child(4),.mark i:nth-child(9){background:transparent}
 nav{display:flex;gap:28px;margin-left:auto;font-size:14px}
 nav a{color:var(--g400);text-decoration:none}nav a.on,nav a:hover{color:var(--white)}
-nav b{font-weight:500;color:var(--ink);background:var(--cyan);border-radius:999px;padding:0 7px;margin-left:5px;font-size:12px}
+nav b{font-weight:500;color:var(--ink);background:var(--cyan);border-radius:999px;padding:0 7px;margin-left:5px;font-size:12px}nav b:empty{display:none}
 .band{padding-top:28px;padding-bottom:32px}
 .band h1{color:var(--white)}
 .band .lead{color:var(--g400);margin:10px 0 0;max-width:70ch}
 .back{color:var(--g400);text-decoration:none;font-size:14px;display:inline-flex;gap:6px;align-items:center;margin-bottom:14px}.back:hover{color:var(--white)}
 
 /* поля на графите */
-.controls{display:grid;grid-template-columns:auto minmax(220px,1.2fr) minmax(180px,.8fr) minmax(220px,1fr) auto;gap:16px;align-items:end}
+.controls{display:grid;grid-template-columns:auto minmax(240px,400px) auto;justify-content:start;gap:16px;align-items:end}
 .field{display:flex;flex-direction:column;gap:8px;font-size:12px;color:var(--g400);letter-spacing:.02em;min-width:0}
 .field select,.field input{font:inherit;font-size:15px;color:var(--white);background:var(--g800);border:1px solid var(--g700);border-radius:var(--r);height:44px;padding:0 14px;width:100%;letter-spacing:0}
 .field select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%23a4a4a8' stroke-width='1.75'%3E%3Cpath d='m4 6 4 4 4-4'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center;padding-right:40px}
@@ -50,9 +50,6 @@ nav b{font-weight:500;color:var(--ink);background:var(--cyan);border-radius:999p
 .seg label:hover{color:var(--white)}
 .seg input:checked+label{background:var(--white);color:var(--ink);font-weight:500}
 .seg input:focus-visible+label{outline:2px solid var(--cyan)}
-.quick{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:14px;font-size:13px;color:var(--g500)}
-.quick button{font:inherit;font-size:13px;color:var(--g400);background:none;border:1px solid var(--g700);border-radius:999px;height:28px;padding:0 11px;cursor:pointer}
-.quick button:hover{color:var(--white);border-color:var(--g500)}.quick button.on{border-color:var(--cyan);color:var(--cyan)}
 
 /* кнопки, чипы, метки */
 .btn{font:inherit;font-size:14px;font-weight:500;height:40px;padding:0 16px;border-radius:var(--r);border:1px solid var(--ink);background:var(--ink);color:var(--white);display:inline-flex;align-items:center;gap:8px;cursor:pointer;text-decoration:none;white-space:nowrap}
@@ -74,6 +71,8 @@ nav b{font-weight:500;color:var(--ink);background:var(--cyan);border-radius:999p
 
 /* табло: рейтинг и полоса покрытия */
 .score{display:inline-block;width:60px;height:48px;border-radius:9px;background:var(--ink);color:var(--cyan);font:500 26px/48px var(--px);text-align:center;letter-spacing:.04em;flex:none}
+/* своя «5» вместо S-образной из шрифта (app.px): ширина и базовая линия — как у цифр Pixelify */
+.d5{display:inline-block;width:.592em;height:.671em;vertical-align:-.014em;margin-right:.04em;fill:currentColor}
 .score.mid{color:#8af7f7}.score.low{color:var(--g400)}
 .score.lg{width:76px;height:60px;font-size:34px;line-height:60px}
 .leds{display:grid;grid-template-columns:repeat(8,16px);gap:5px;background:var(--ink);padding:9px 10px;border-radius:9px;width:max-content}
@@ -122,6 +121,10 @@ dl.legal{display:grid;grid-template-columns:96px 1fr;gap:6px 12px;margin:0;font-
 .kp textarea.note{height:84px;resize:vertical}
 .kp input:focus,.kp textarea:focus{outline:none;border-color:var(--ink)}
 .kp .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.letter{position:relative}.letter textarea[name=body]{padding-right:60px;display:block}
+.letter .copy{position:absolute;top:8px;right:18px;width:34px;height:34px;display:grid;place-items:center;border:1px solid var(--g200);border-radius:8px;background:var(--white);color:var(--g600);cursor:pointer}
+.letter .copy:hover{border-color:var(--ink);color:var(--ink)}
+.markform{margin-top:28px;padding-top:24px;border-top:1px solid var(--g200)}
 .status{display:flex;flex-wrap:wrap;gap:6px}
 .status input{position:absolute;opacity:0;pointer-events:none}
 .status .chip{height:32px;font-size:13px}
@@ -131,8 +134,8 @@ dl.legal{display:grid;grid-template-columns:96px 1fr;gap:6px 12px;margin:0;font-
 .toast{position:fixed;top:20px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--white);padding:10px 16px;border-radius:10px;font-size:14px;z-index:20;transition:opacity .2s}
 .toast[hidden]{display:block;opacity:0;pointer-events:none}
 main{padding-bottom:96px}
-@media (max-width:1100px){.controls{grid-template-columns:1fr 1fr}}
-@media (max-width:640px){.wrap{padding:0 16px}.controls{grid-template-columns:1fr}.seg{overflow-x:auto}nav a:not(.on){display:none}h1{font-size:32px}}
+@media (max-width:1100px){.controls{grid-template-columns:1fr 1fr}.controls>.field:first-child{grid-column:1/-1}}
+@media (max-width:640px){.wrap{padding:0 16px}.controls{grid-template-columns:1fr}.seg{overflow-x:auto;scrollbar-width:none}nav a:not(.on){display:none}h1{font-size:32px}}
 </style>
 {% block head %}{% endblock %}
 </head>
@@ -142,7 +145,7 @@ main{padding-bottom:96px}
     <a class="brand" href="/"><span class="mark"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>Поставщики</a>
     <nav>
       <a href="/" class="{{ 'on' if request.url.path == '/' }}">Поиск</a>
-      <a href="/shortlist?city={{ p.city|urlencode }}" class="{{ 'on' if request.url.path == '/shortlist' }}">Шортлист{% if shortlist_n() %}<b>{{ shortlist_n() }}</b>{% endif %}</a>
+      <a href="/shortlist?city={{ p.city|urlencode }}" class="{{ 'on' if request.url.path == '/shortlist' }}">Шортлист<b id="shortn">{{ shortlist_n() or '' }}</b></a>
       <a href="/about" class="{{ 'on' if request.url.path == '/about' }}">Как это работает</a>
     </nav>
   </div>
@@ -151,16 +154,21 @@ main{padding-bottom:96px}
 <main><div class="wrap">{% block body %}{% endblock %}</div></main>
 <div class="toast" id="toast" hidden></div>
 <script>
+function shortN(n) { document.getElementById('shortn').textContent = n || ''; }
+function setStar(id, on) {  // кнопки «В шортлист» и звёздочки у названия в строках выдачи
+  document.querySelectorAll(`[data-star="${id}"]`).forEach(b => {
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    const t = b.querySelector('.label'); if (t) t.textContent = on ? 'В шортлисте' : 'Добавить в шортлист';
+  });
+  document.querySelectorAll(`[data-st="${id}"]`).forEach(s => s.hidden = !on);
+}
 function toast(t) { const el = document.getElementById('toast'); el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => el.hidden = true, 2200); }
 document.addEventListener('click', async e => {
   const star = e.target.closest('[data-star]');
   if (star) {
     e.preventDefault(); e.stopPropagation();
     const j = await (await fetch('/s/' + star.dataset.star + '/star', { method: 'POST' })).json();
-    document.querySelectorAll(`[data-star="${star.dataset.star}"]`).forEach(b => {
-      b.setAttribute('aria-pressed', j.starred ? 'true' : 'false');
-      const t = b.querySelector('.label'); if (t) t.textContent = j.starred ? 'В шортлисте' : 'В шортлист';
-    });
+    setStar(star.dataset.star, j.starred); shortN(j.n);
     toast(j.starred ? 'Добавлен в шортлист' : 'Убран из шортлиста');
     return;
   }
@@ -176,7 +184,7 @@ document.addEventListener('change', async e => {
   const f = e.target.closest('form.markform');
   if (!f || !(e.target.name === 'status' || e.target.name === 'note')) return;
   const body = new FormData(); body.append(e.target.name, e.target.value);
-  await fetch(f.action, { method: 'POST', body });
+  shortN((await (await fetch(f.action, { method: 'POST', body })).json()).n);
   toast(e.target.name === 'status' ? (e.target.value ? 'Статус: ' + e.target.value : 'Статус снят') : 'Заметка сохранена');
 });
 </script>

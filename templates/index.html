@@ -2,26 +2,33 @@
 {% from "_icons.html" import icon %}
 {% set ctx = 'cat=' ~ p.cat ~ '&city=' ~ (p.city|urlencode) ~ '&net=' ~ p.net %}
 {% set NONE = '<span class="gap">Условия доставки не нашли</span>' %}
+{% set HINTS = {'local': 'Склад или офис в городе или области', 'price': 'Цена товара категории — на сайте или в прайс-листе', 'contacts': 'Найден телефон или email', 'docs': 'На сайте названы декларации, ветдокументы (Меркурий), ХАССП, ГОСТ — без проверки по реестру'} %}
 {% block head %}
 <style>
 .summary{display:flex;align-items:flex-end;gap:20px 40px;flex-wrap:wrap;padding:40px 0 20px}
-.count-h{display:flex;align-items:baseline;gap:14px;font-size:22px;line-height:1.2;letter-spacing:-.01em}
-.count-h .count{font-size:64px;line-height:.9;letter-spacing:-.04em}
-.count-h small{display:block;color:var(--g500);font-size:15px;margin-top:6px;letter-spacing:0}
+/* подпись в две строки ровно по высоте цифры: верх — по верху цифр, низ — по базовой линии */
+.count-h{display:flex;align-items:stretch;gap:14px;font-size:22px;line-height:1;letter-spacing:-.01em}
+.count-h .count{font-size:64px;line-height:1;letter-spacing:-.04em;text-box:trim-both cap alphabetic}
+.count-h .lbl{display:flex;flex-direction:column;justify-content:space-between}
+.count-h .lbl>span{text-box:trim-both cap alphabetic}
+.count-h small{color:var(--g500);font-size:15px;letter-spacing:0;text-box:trim-both cap alphabetic}
 .filters{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto}
 .filters input{position:absolute;opacity:0;pointer-events:none}
 .filters input:focus-visible+.chip{outline:2px solid var(--teal);outline-offset:2px}
 .toolbar{display:flex;align-items:center;gap:18px;flex-wrap:wrap;padding:0 0 14px;font-size:13px;color:var(--g600)}
 .toolbar .lg{display:inline-flex;align-items:center;gap:8px}
-.toolbar .acts{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
-.toolbar form{display:contents}
+.toolbar .lg:first-of-type{margin-left:auto}
+.find{position:relative;width:min(340px,100%)}
+.find .ic{position:absolute;left:12px;top:12px;color:var(--g500)}
+.find input{font:inherit;font-size:14px;width:100%;height:40px;padding:0 12px 0 36px;border:1px solid var(--g300);border-radius:var(--r);background:var(--white);color:var(--ink)}
+.find input:hover{border-color:var(--g400)}.find input:focus{outline:none;border-color:var(--ink)}
 .ledger{background:var(--white);border:1px solid var(--g200);border-radius:14px;overflow:clip}
 .row{display:grid;grid-template-columns:28px 64px minmax(230px,1.5fr) 184px minmax(220px,1.3fr) minmax(180px,1fr) 32px;gap:20px;align-items:center;padding:16px 20px;border-top:1px solid var(--g200)}
 .lhead{border-top:0;padding-top:12px;padding-bottom:12px;font-size:12px;color:var(--g500);background:var(--g50);position:sticky;top:0;z-index:2}
 .item{cursor:pointer}.item:hover{background:var(--g50)}.item.open{background:var(--g100)}
 .row input[type=checkbox]{width:18px;height:18px;accent-color:var(--ink);margin:0;cursor:pointer}
 .name{font-weight:600;font-size:16px;line-height:1.3;text-decoration:none}
-.name .ic{color:var(--teal);fill:var(--cyan);margin-right:4px}
+.name .st .ic{color:var(--teal);fill:var(--cyan);margin:0 4px 0 0}.name .st[hidden]{display:none}
 .meta{font-size:13px;color:var(--g500);margin-top:4px;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 .cov-cap{font-size:12px;color:var(--g500);margin-top:6px}
 .cond{font-size:14px;line-height:1.4}.cond .sub{font-size:13px;color:var(--g600);margin-top:4px}
@@ -33,11 +40,15 @@
 .panel .more{display:flex;justify-content:flex-end;padding:0 28px 18px;font-size:13px}
 .panel.loading{height:120px;background:linear-gradient(90deg,var(--g100),var(--g50),var(--g100));background-size:200% 100%;animation:sh 1.2s linear infinite}
 @keyframes sh{to{background-position:-200% 0}}
-.selbar{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:var(--white);border-radius:14px;padding:10px 10px 10px 20px;display:flex;align-items:center;gap:16px;box-shadow:0 12px 32px #04040633;font-size:14px;z-index:5}
+.selbar{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:var(--white);border-radius:14px;padding:10px;display:flex;align-items:center;gap:8px;box-shadow:0 12px 32px #04040633;font-size:14px;z-index:5}
 .selbar[hidden]{display:none}
-.selbar .btn.ghost{background:transparent;border-color:var(--g700);color:var(--white)}
+.selbar .clear{display:inline-flex;align-items:center;gap:8px;height:40px;padding:0 12px 0 10px;margin-right:8px;border:0;border-radius:var(--r);background:none;color:var(--white);font:inherit;font-size:14px;cursor:pointer}
+.selbar .clear .ic{color:var(--g400)}.selbar .clear:hover{background:var(--g800)}.selbar .clear:hover .ic{color:var(--white)}
+.selbar .btn.ghost{background:transparent;border-color:var(--g700);color:var(--white)}.selbar .btn.ghost:hover{border-color:var(--g400)}
 .job{margin-top:24px}
 .job .log{font:12px/1.5 ui-monospace,Consolas,monospace;background:var(--ink);color:#c9d1d9;border-radius:10px;padding:10px 12px;max-height:160px;overflow:auto;white-space:pre-wrap;margin-top:10px}
+.live{display:flex;align-items:center;gap:16px 24px;flex-wrap:wrap;margin-top:16px;padding:20px 24px;border:1px dashed var(--g300);border-radius:14px;font-size:14px;color:var(--g600)}
+.live b{color:var(--ink);font-weight:600}.live .btn{margin-left:auto}
 .start{padding:56px 0 24px;max-width:860px}
 .start p{color:var(--g600);font-size:16px;margin:14px 0 24px}
 .start .cats{display:flex;gap:8px;flex-wrap:wrap}
@@ -46,7 +57,7 @@
   .row>.cov,.row>.cond,.row>.contact,.lhead>.h-cov,.lhead>.h-cond,.lhead>.h-contact{display:none}
   .filters{margin-left:0}
 }
-@media (max-width:640px){.count-h .count{font-size:48px}.toolbar .acts{margin-left:0}}
+@media (max-width:640px){.count-h .count{font-size:48px}.toolbar .lg:first-of-type{margin-left:0}.find{width:100%}.live .btn{margin-left:0}}
 </style>
 {% endblock %}
 
@@ -62,19 +73,17 @@
         <option value="">Все категории сети</option>
         {% for c in CATS %}<option value="{{ c.id }}" data-nets="{{ c.nets|join(' ') }}" {{ 'selected' if p.cat == c.id }}>{{ c.name }}</option>{% endfor %}
       </select></label>
-    <label class="field"><span>Город доставки</span>
-      <input name="city" value="{{ p.city }}" list="cities" autocomplete="off">
-      <datalist id="cities">{% for c in CITIES %}<option value="{{ c }}">{% endfor %}</datalist></label>
-    <label class="field"><span>Уточнить</span><input name="q" type="search" value="{{ p.q }}" placeholder="Форель, моцарелла, крафт…"></label>
-    <button class="btn cyan" type="submit" style="height:44px">{{ icon('search') }}Найти</button>
+    <div class="field"><span>Город</span><div class="seg" role="radiogroup" aria-label="Город">
+      {% for c in NET_CITIES.get(p.net, CITIES) %}<input type="radio" name="city" id="c-{{ loop.index }}" value="{{ c }}" {{ 'checked' if p.city == c }}><label for="c-{{ loop.index }}">{{ c }}</label>{% endfor %}
+    </div></div>
+    <noscript><button class="btn cyan" type="submit" style="height:44px">Показать</button></noscript>
   </form>
-  <div class="quick">Города сети:<span id="netcities" style="display:contents"></span></div>
 </div>
 {% endblock %}
 
 {% block body %}
 {% if job.log %}
-<div class="card job" id="job"><b>Живой поиск: {{ job.title }}</b> <span class="tag {{ 'warn' if job.running else 'good' }}">{{ 'идёт сбор…' if job.running else 'готово' }}</span>
+<div class="card job" id="job"><b>Живой поиск{% if job.title %}: {{ job.title }}{% endif %}</b> <span class="tag {{ 'warn' if job.running else 'good' }}">{{ 'идёт сбор…' if job.running else 'готово' }}</span>
   <div class="log" id="joblog">{{ job.log|join('\n') }}</div></div>
 {% endif %}
 
@@ -86,24 +95,17 @@
 </section>
 {% else %}
 <section class="summary">
-  <h1 class="count-h"><span class="count">{{ rows|length }}</span><span>{{ plural(rows|length, 'поставщик', 'поставщика', 'поставщиков') }}
+  <h1 class="count-h"><span class="count">{{ rows|length }}</span><span class="lbl"><span>{{ plural(rows|length, 'поставщик', 'поставщика', 'поставщиков') }}</span>
     <small>{{ CAT[p.cat].name if p.cat else 'Все категории' ~ (' сети «' ~ NETS[p.net] ~ '»' if p.net else '') }} · {{ p.city }}{% if rows|length != found %} · из {{ found }} найденных{% endif %}</small></span></h1>
   <div class="filters" role="group" aria-label="Фильтры">
-    {% for k, (label, _) in FILTERS.items() %}<input type="checkbox" name="only" value="{{ k }}" id="o-{{ k }}" form="search" {{ 'checked' if k in p.only }}><label class="chip" for="o-{{ k }}">{{ label }}<b>{{ counts[k] }}</b></label>{% endfor %}
+    {% for k, (label, _) in FILTERS.items() %}<input type="checkbox" name="only" value="{{ k }}" id="o-{{ k }}" form="search" {{ 'checked' if k in p.only }}><label class="chip" for="o-{{ k }}" title="{{ HINTS[k] }}">{{ label }}<b>{{ counts[k] }}</b></label>{% endfor %}
   </div>
 </section>
 <div class="toolbar">
+  <label class="find">{{ icon('search') }}<input type="search" name="q" form="search" value="{{ p.q }}" placeholder="Найти в выдаче: форель, моцарелла…" aria-label="Найти в выдаче по названию и товару"></label>
   <span class="lg"><span class="leds one"><span class="led on"></span></span>факт найден, у него есть источник</span>
   <span class="lg"><span class="leds one"><span class="led"></span></span>не нашли — вопрос попадёт в запрос КП</span>
-  <div class="acts">
-    <a class="btn ghost" href="/export.xlsx?{{ request.url.query }}">{{ icon('download') }}Скачать XLSX</a>
-    {% if p.cat %}
-    {% if LIVE %}<form method="post" action="/live">
-      <input type="hidden" name="cat" value="{{ p.cat }}"><input type="hidden" name="city" value="{{ p.city }}"><input type="hidden" name="q" value="{{ p.q }}"><input type="hidden" name="net" value="{{ p.net }}">
-      <button class="btn" type="submit" {{ 'disabled' if job.running }} title="Ищет новые сайты поставщиков в Яндексе и обходит их, 1–3 минуты">{{ 'Идёт поиск…' if job.running else 'Найти новых в Яндексе' }}</button></form>
-    {% else %}<span class="small muted">Живой поиск выключен: нет ключа Yandex Search API</span>{% endif %}
-    {% endif %}
-  </div>
+  <a class="btn ghost" href="/export.xlsx?{{ request.url.query }}">{{ icon('download') }}Скачать XLSX</a>
 </div>
 
 {% if rows %}
@@ -112,15 +114,15 @@
   {% for s in rows %}
   {% set k = kind(s) %}
   <div class="row item" role="row" tabindex="0" data-id="{{ s.id }}" data-panel="/s/{{ s.id }}/panel?{{ ctx }}" aria-expanded="false">
-    <span><input type="checkbox" class="pick" value="{{ s.id }}" aria-label="Выбрать для сравнения: {{ s.name }}"></span>
-    <span class="score {{ score_cls(s.score) }}" title="Рейтинг {{ s.score }} из 100">{{ s.score }}</span>
-    <span><a class="name" href="/s/{{ s.id }}?{{ ctx }}">{% if s.mark.starred %}{{ icon('star', 'sm') }}{% endif %}{{ s.name }}</a>
+    <span><input type="checkbox" class="pick" value="{{ s.id }}" aria-label="Выбрать: {{ s.name }}"></span>
+    <span class="score {{ score_cls(s.score) }}" title="Рейтинг {{ s.score }} из 100">{{ s.score|px }}</span>
+    <span><a class="name" href="/s/{{ s.id }}?{{ ctx }}"><span class="st" data-st="{{ s.id }}" title="В шортлисте" {{ '' if s.mark.starred else 'hidden' }}>{{ icon('star', 'sm') }}</span>{{ s.name }}</a>
       <div class="meta"><span>{{ legal_line(s) }}</span>{% if k %}<span class="tag {{ k[1] }}">{{ k[0] }}</span>{% endif %}
         {% if not p.cat %}<span class="tag">{{ CAT[s.cat].name }}</span>{% endif %}{% if s.mark.status %}<span class="tag ink">{{ s.mark.status }}</span>{% endif %}</div></span>
     <span class="cov"><span class="leds">{% for key, label in COVERAGE %}<span class="led {{ 'on' if has(s, key) }}" title="{{ label }}: {{ 'найдено' if has(s, key) else 'нет данных' }}"></span>{% endfor %}</span>
       <div class="cov-cap">известно {{ known(s) }} из 8 · {{ zone(s) }}</div></span>
     <span class="cond">{{ allv(s, 'delivery') or NONE|safe }}
-      {% set sub = [] %}{% if first(s, 'moq') %}{% set _ = sub.append('Мин. заказ ' ~ first(s, 'moq')) %}{% endif %}{% if first(s, 'price') %}{% set _ = sub.append('Цена ' ~ first(s, 'price')) %}{% endif %}
+      {% set sub = [] %}{% if first(s, 'moq') %}{% set _ = sub.append('Мин. заказ ' ~ first(s, 'moq')) %}{% endif %}{% if first(s, 'price') %}{% set _ = sub.append('Цена ' ~ first(s, 'price')|truncate(52)) %}{% endif %}
       {% if sub %}<div class="sub">{{ sub|join(' · ') }}</div>{% endif %}</span>
     <span class="contact">{% if first(s, 'phone') %}<a href="tel:{{ first(s, 'phone') }}">{{ first(s, 'phone')|tel }}</a>{% endif %}
       {% if first(s, 'email') %}<a href="mailto:{{ first(s, 'email') }}" title="{{ first(s, 'email') }}">{{ first(s, 'email') }}</a>{% endif %}
@@ -130,12 +132,26 @@
   {% endfor %}
 </div>
 {% else %}
-<div class="ledger empty"><p>По этим условиям поставщиков пока нет.</p><p class="small">Снимите часть фильтров{% if p.cat and LIVE %} или запустите «Найти новых в Яндексе»{% endif %}.</p></div>
+<div class="ledger empty"><p>По этим условиям поставщиков пока нет.</p><p class="small">Снимите часть фильтров{% if p.q %} или очистите поиск в выдаче{% endif %}.</p></div>
+{% endif %}
+
+{% if p.cat %}
+<div class="live">
+  {% if LIVE %}
+  {% set ran = (p.cat ~ '|' ~ p.city) in job.done %}
+  <span><b>Не нашли подходящего?</b> Поищем новые сайты поставщиков «{{ CAT[p.cat].name|lower }}» в Яндексе по городу {{ p.city }}, обойдём их и проверим юрлица. Около 1–3 минут.{% if ran %} Сегодня этот поиск уже запускали.{% endif %}</span>
+  <form method="post" action="/live">
+    <input type="hidden" name="cat" value="{{ p.cat }}"><input type="hidden" name="city" value="{{ p.city }}"><input type="hidden" name="q" value="{{ p.q }}"><input type="hidden" name="net" value="{{ p.net }}">
+    <button class="btn" type="submit" {{ 'disabled' if job.running or ran }}>{{ icon('search') }}{{ 'Идёт поиск…' if job.running else 'Найти новых в Яндексе' }}</button></form>
+  {% else %}<span>Живой поиск выключен: нет ключа Yandex Search API.</span>{% endif %}
+</div>
 {% endif %}
 {% endif %}
 
-<div class="selbar" id="selbar" hidden><span id="seltext"></span>
-  <button class="btn cyan" type="button" id="cmp">Сравнить</button><button class="btn ghost" type="button" id="selclear">Снять выбор</button></div>
+<div class="selbar" id="selbar" hidden role="region" aria-label="Выбранные поставщики">
+  <button class="clear" type="button" id="selclear" title="Снять выделение">{{ icon('x') }}<span id="seltext"></span></button>
+  <button class="btn ghost" type="button" id="toshort">{{ icon('star') }}В шортлист</button>
+  <button class="btn cyan" type="button" id="cmp">Сравнить</button></div>
 {% endblock %}
 
 {% block scripts %}
@@ -147,21 +163,13 @@ function filterCats() {
   for (const o of sel.options) if (o.value) o.hidden = !!n && !o.dataset.nets.split(' ').includes(n);
   if (sel.selectedOptions[0] && sel.selectedOptions[0].hidden) sel.value = '';
 }
-const NC = {{ NET_CITIES|tojson }};
-function netCities() {  // быстрый выбор: города, где работает выбранная сеть
-  const n = net(), list = n ? NC[n] : [...new Set(Object.values(NC).flat())], city = form.elements.city;
-  document.getElementById('netcities').innerHTML = list.map(c => `<button type="button" class="${city.value === c ? 'on' : ''}" data-city="${c}">${c}</button>`).join('');
-}
-filterCats(); netCities();
-// фильтры, сеть, категория и город применяются сразу; «Найти» — для текста уточнения
+filterCats();
+// сеть, категория, город, фильтры и поиск в выдаче применяются сразу
 document.addEventListener('change', e => {
   if (e.target.matches('input[name=net]')) filterCats();
-  if (e.target.matches('input[name=net], input[name=only], select[name=cat], input[name=city]')) form.requestSubmit();
+  if (e.target.matches('input[name=net], input[name=only], select[name=cat], input[name=city], input[name=q]')) form.requestSubmit();
 });
-document.addEventListener('click', e => {
-  const c = e.target.closest('[data-city]');
-  if (c) { form.elements.city.value = c.dataset.city; form.requestSubmit(); }
-});
+document.addEventListener('search', e => { if (e.target.name === 'q' && !e.target.value) form.requestSubmit(); }, true);
 
 // раскрытие карточки в строке
 async function toggle(row) {
@@ -184,18 +192,31 @@ document.addEventListener('keydown', e => {
   if (e.target.classList?.contains('item') && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); toggle(e.target); }
 });
 
-// выбор для сравнения
+// выбор: в шортлист — сколько угодно, сравнить — от двух до четырёх
 const picks = () => [...document.querySelectorAll('.pick:checked')].map(x => x.value);
-document.addEventListener('change', e => {
-  if (!e.target.classList.contains('pick')) return;
-  if (picks().length > 4) { e.target.checked = false; toast('Сравнить можно до четырёх поставщиков'); }
+const cmp = document.getElementById('cmp');
+function selbar() {
   const n = picks().length;
   document.getElementById('selbar').hidden = !n;
-  document.getElementById('seltext').textContent = n === 1 ? 'Выбран 1 — отметьте ещё хотя бы одного' : `Выбрано ${n} из 4`;
-  document.getElementById('cmp').disabled = n < 2;
+  document.getElementById('seltext').textContent = `Выбрано: ${n}`;
+  cmp.disabled = n < 2 || n > 4;
+  cmp.title = n < 2 ? 'Отметьте хотя бы двух поставщиков' : n > 4 ? 'Сравнить можно до четырёх поставщиков' : '';
+}
+function clearPicks() { document.querySelectorAll('.pick:checked').forEach(x => x.checked = false); selbar(); }
+document.addEventListener('change', e => { if (e.target.classList.contains('pick')) selbar(); });
+cmp.addEventListener('click', () => location.href = '/compare?ids=' + picks().join(',') + '&{{ ctx|safe }}');
+document.getElementById('selclear').addEventListener('click', clearPicks);
+document.getElementById('toshort').addEventListener('click', async () => {
+  const ids = picks();
+  let n;
+  for (const id of ids) {
+    const body = new FormData(); body.append('starred', '1');
+    n = (await (await fetch('/s/' + id + '/mark', { method: 'POST', body })).json()).n;
+    setStar(id, true);
+  }
+  shortN(n); clearPicks();
+  toast(ids.length === 1 ? 'Добавлен в шортлист' : `Добавлено в шортлист: ${ids.length}`);
 });
-document.getElementById('cmp').addEventListener('click', () => location.href = '/compare?ids=' + picks().join(',') + '&{{ ctx|safe }}');
-document.getElementById('selclear').addEventListener('click', () => { document.querySelectorAll('.pick:checked').forEach(x => x.checked = false); document.getElementById('selbar').hidden = true; });
 {% if job.running %}
 const poll = setInterval(async () => {
   const j = await (await fetch('/live/status')).json();

@@ -8,6 +8,7 @@ from urllib.parse import quote
 from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
+from markupsafe import Markup
 from openpyxl import Workbook
 
 import collect
@@ -22,10 +23,13 @@ ASK = {"цена": "актуальный прайс-лист и цены для 
        "условия доставки": "условия и график доставки", "документы":
        "какие документы сопровождают продукцию (декларации, ветеринарные свидетельства)",
        "ИНН": "реквизиты компании"}
-JOB = {"running": False, "log": [], "title": "", "day": "", "count": 0}
-LIVE_LIMIT = int(os.environ.get("LIVE_LIMIT", "30"))
+JOB = {"running": False, "log": [], "title": "", "day": "", "count": 0, "done": []}
+# публичный прототип: каждый запуск — платные запросы к Yandex Search API (≈1–2 ₽). Одна пара «категория + город»
+# раз в день (повтор найдёт те же сайты), всего не больше LIVE_LIMIT запусков в день.
+# ponytail: счётчики в памяти, сбрасываются при перезапуске сервиса
+LIVE_LIMIT = int(os.environ.get("LIVE_LIMIT", "10"))
 T.env.globals.update(CATS=core.CATEGORIES, CAT=core.CAT, NETS=core.NETS, LABELS=LABELS, STATUSES=STATUSES,
-                     CITIES=list(collect.REGION), NET_CITIES=core.NET_CITIES, FILTERS=core.FILTERS, LIVE=bool(os.environ.get("YANDEX_API_KEY")))
+                     CITIES=core.CITIES, NET_CITIES=core.NET_CITIES, FILTERS=core.FILTERS, LIVE=bool(os.environ.get("YANDEX_API_KEY")))
 
 
 def db():
@@ -34,8 +38,10 @@ def db():
 
 def params(request: Request) -> dict:
     p = request.query_params
-    return {"net": p.get("net", ""), "cat": p.get("cat", ""), "city": p.get("city") or "Екатеринбург",
-            "q": p.get("q", "").strip(), "only": p.getlist("only")}
+    net = p.get("net", "")
+    cities = core.NET_CITIES.get(net, core.CITIES)
+    city = p.get("city") if p.get("city") in cities else cities[0]  # база собрана только по городам сетей
+    return {"net": net, "cat": p.get("cat", ""), "city": city, "q": p.get("q", "").strip(), "only": p.getlist("only")}
 
 
 def run_search(p):
@@ -115,9 +121,26 @@ def letter(s, p):
             "mailto": f"mailto:{email}?subject={quote(subj)}&body={quote(body)}" if email else ""}
 
 
+def shortlist_n(c=None):
+    return (c or db()).execute("select count(*) from marks where starred=1 or status!=''").fetchone()[0]
+
+
 T.env.globals.update(first=first, allv=allv, has=has, zone=zone, kind=kind, plural=plural, legal_line=legal_line,
                      COVERAGE=COVERAGE, LEGAL_RU=LEGAL_RU, known=lambda s: sum(has(s, k) for k, _ in COVERAGE),
-                     shortlist_n=lambda: db().execute("select count(*) from marks where starred=1 or status!=''").fetchone()[0])
+                     shortlist_n=shortlist_n)
+# у Pixelify Sans «5» похожа на «S»: рисуем свою — зеркальная «2» с прямой верхней перекладиной.
+# Прямоугольники в сетке шрифта (единицы — 1/700 em, y от базовой линии), снятые с глифа «2»
+FIVE = [(-443, -364, 42, 372), (-364, -256, 42, 119), (-256, -195, 42, 308), (-195, -178, 42, 372),
+        (-178, -133, 294, 372), (-133, -70, 42, 119), (-133, -70, 294, 372), (-70, -54, 42, 372), (-54, 9, 105, 308)]
+FIVE_SVG = Markup('<svg class="d5" viewBox="0 -460 414 470" role="img" aria-label="5"><path d="' + "".join(
+    f"M{a} {t}H{b}V{u}H{a}Z" for t, u, a, b in FIVE) + '"/></svg>')  # один path — без швов между частями
+
+
+def px(n):
+    return Markup("").join(FIVE_SVG if ch == "5" else ch for ch in str(n))
+
+
+T.env.filters["px"] = px
 T.env.filters["host"] = core.host
 T.env.filters["tel"] = lambda p: f"{p[:2]} {p[2:5]} {p[5:8]}-{p[8:10]}-{p[10:]}" if p and len(p) == 12 else p
 T.env.filters["telify"] = lambda t: re.sub(r"\+7\d{10}", lambda m: T.env.filters["tel"](m.group()), t)
@@ -169,7 +192,7 @@ def mark(sid: int, status: str = Form(None), note: str = Form(None), starred: st
     c.commit()
     if back.startswith("/"):
         return RedirectResponse(back, status_code=303)
-    return JSONResponse({"ok": True})
+    return JSONResponse({"ok": True, "n": shortlist_n(c)})
 
 
 @app.post("/s/{sid}/star")
@@ -180,7 +203,7 @@ def star(sid: int):
     c.execute("insert or replace into marks values(?,?,?,?,?)",
               (sid, m["status"] if m else "", m["note"] if m else "", on, core.now()))
     c.commit()
-    return JSONResponse({"starred": on})
+    return JSONResponse({"starred": on, "n": shortlist_n(c)})
 
 
 @app.get("/compare", response_class=HTMLResponse)
@@ -237,13 +260,19 @@ def export(request: Request, what: str = "search"):
 
 @app.post("/live")
 def live(cat: str = Form(...), city: str = Form("Екатеринбург"), q: str = Form(""), net: str = Form("")):
-    today = core.now()[:10]
+    today, key = core.now()[:10], f"{cat}|{city}"
     if JOB.get("day") != today:
-        JOB.update(day=today, count=0)
-    if JOB["count"] >= LIVE_LIMIT:  # публичный прототип: каждый запуск — платные запросы к Yandex Search API
+        JOB.update(day=today, count=0, done=[])
+    if JOB["running"]:
+        pass
+    elif key in JOB["done"]:
+        JOB.update(log=["Этот поиск сегодня уже запускали: новые сайты в выдаче Яндекса появятся не раньше завтра."],
+                   title=f"{core.CAT.get(cat, {}).get('name', cat)} · {city}")
+    elif JOB["count"] >= LIVE_LIMIT:
         JOB.update(log=[f"Лимит живых поисков на сегодня исчерпан ({LIVE_LIMIT})."], title="")
-    elif not JOB["running"] and cat in core.CAT and os.environ.get("YANDEX_API_KEY"):
+    elif cat in core.CAT and city in core.CITIES and os.environ.get("YANDEX_API_KEY"):
         JOB["count"] += 1
+        JOB["done"].append(key)
         JOB.update(running=True, log=[], title=f"{core.CAT[cat]['name']} · {city}")
 
         def run():

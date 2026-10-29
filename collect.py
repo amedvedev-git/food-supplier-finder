@@ -10,6 +10,7 @@ import argparse
 import base64
 import gzip
 import hashlib
+import io
 import json
 import os
 import re
@@ -22,7 +23,10 @@ from urllib.parse import urljoin, urlparse
 from urllib.robotparser import RobotFileParser
 
 import httpx
+import openpyxl
+import pypdf
 import trafilatura
+import xlrd
 from selectolax.lexbor import LexborHTMLParser as HTMLParser
 
 import core
@@ -43,6 +47,7 @@ SKIP = re.compile(r"(avito|ozon|wildberries|yandex|ya\.ru|2gis|pulscen|agroserve
 LINKS = re.compile(r"контакт|contact|kontakt|доставк|dostavk|delivery|shipping|оплат|oplat|payment|о[ -]компании|"
                    r"about|o-kompanii|company|реквизит|rekvizit|сертифик|sertif|certif|документ|document|прайс|"
                    r"price|оптов|optov|wholesale|сотрудничеств|partner|horeca|условия", re.I)
+CATALOG = re.compile(r"каталог|catalog|продукци|produkci|ассортимент|assortiment|products?(?![a-z])|shop", re.I)
 
 _robots, _last, _lock = {}, {}, threading.Lock()
 # сырые ответы (страницы, Яндекс, DaData): базу можно пересобрать новыми правилами без обхода и платных запросов.
@@ -89,8 +94,8 @@ def get(url, delay=1.0):
     return cached("page:" + url, lambda: fetch(url, delay))
 
 
-def fetch(url, delay=1.0):
-    """HTML страницы или None. Пауза на хост, robots.txt, лимит 3 МБ."""
+def fetch(url, delay=1.0, raw=False):
+    """HTML страницы (raw — байты файла) или None. Пауза на хост, robots.txt, лимит 3 МБ (файл — 10 МБ)."""
     host = core.domain(url)
     if not allowed(url):
         return None
@@ -105,11 +110,37 @@ def fetch(url, delay=1.0):
         return None
     if r.status_code in (403, 429) and host in DELAY:
         raise Blocked(f"{host}: HTTP {r.status_code}")
-    if r.status_code != 200 or "html" not in r.headers.get("content-type", "html") or len(r.content) > 3_000_000:
+    if r.status_code != 200 or len(r.content) > (10_000_000 if raw else 3_000_000):
+        return None
+    if raw:
+        return r.content
+    if "html" not in r.headers.get("content-type", "html"):
         return None
     if "не робот" in r.text[:20000] or "captcha" in str(r.url):
         raise Blocked(f"{host}: капча")
     return r.text
+
+
+def price_file(url):
+    """Строки прайс-листа (XLSX, XLS, PDF) списками ячеек. В кэше — строки, а не сам файл."""
+    return cached("pricelist:" + url, lambda: (lambda b: None if b is None else table_rows(b))(fetch(url, raw=True)))
+
+
+def table_rows(data: bytes) -> list:
+    try:
+        if data[:4] == b"%PDF":  # layout сохраняет колонки отступами
+            return [re.split(r"\s{2,}", ln.strip()) for pg in pypdf.PdfReader(io.BytesIO(data)).pages[:40]
+                    for ln in (pg.extract_text(extraction_mode="layout") or "").splitlines() if ln.strip()]
+        if data[:2] == b"PK":
+            wb = openpyxl.load_workbook(io.BytesIO(data), read_only=True, data_only=True)
+            return [["" if x is None else str(x) for x in r] for ws in wb.worksheets
+                    for r in ws.iter_rows(values_only=True)][:20000]
+        if data[:4] == b"\xd0\xcf\x11\xe0":
+            book = xlrd.open_workbook(file_contents=data)
+            return [[str(x) for x in sh.row_values(i)] for sh in book.sheets() for i in range(sh.nrows)][:20000]
+    except Exception:  # noqa: BLE001 — битый или зашифрованный файл: пустой результат кэшируется, повторно не качаем
+        pass
+    return []
 
 
 def text_of(tree: HTMLParser) -> str:
@@ -218,7 +249,7 @@ def yandex_category(c, cat, city, log, extra="", fresh=False):
 # --- сайты поставщиков ------------------------------------------------------------------------------------
 
 def crawl(site):
-    """Главная + до 4 страниц (контакты, доставка, о компании, документы).
+    """Главная + до 4 страниц (контакты, доставка, о компании, документы) + страница каталога.
     → [(url, весь текст, основной контент, название, ссылки на прайсы)]"""
     html = get(site)
     if not html:
@@ -228,7 +259,7 @@ def crawl(site):
     title = tree.css_first("title")
     name = core.pick_name((og.attributes.get("content") or "") if og else (title.text() if title else ""), "")
     pages, seen, files = [], {site.rstrip("/")}, []
-    cand = []
+    cand, shop = [], []
     for a in tree.css("a[href]"):
         href, label = a.attributes.get("href") or "", a.text(strip=True)
         u = urljoin(site + "/", href).split("#")[0]
@@ -236,11 +267,14 @@ def crawl(site):
             continue
         if re.search(r"\.(pdf|xlsx?|docx?)$", u, re.I) and re.search(r"прайс|price|каталог|catalog", u + label, re.I):
             files.append((u, label or "прайс-лист"))
-        elif LINKS.search(href + " " + label) and u.rstrip("/") not in seen and not re.search(r"\.\w{2,4}$", u):
-            seen.add(u.rstrip("/"))
-            cand.append(u)
+        elif u.rstrip("/") not in seen and not re.search(r"\.\w{2,4}$", u):
+            for rx, lst in ((LINKS, cand), (CATALOG, shop)):
+                if rx.search(href + " " + label):
+                    seen.add(u.rstrip("/"))
+                    lst.append(u)
+                    break
     pages.append((site, text_of(tree), main_of(html), name))
-    for u in cand[:4]:
+    for u in cand[:4] + shop[:1]:  # страница каталога — там цены за кг у интернет-магазинов опта
         h = get(u)
         if h:
             pages.append((u, text_of(HTMLParser(h)), main_of(h), ""))
@@ -252,20 +286,22 @@ def main_of(html):
     return trafilatura.extract(html, include_tables=True, favor_recall=True) or ""
 
 
-def enrich_sites(c, log, only_ids=None):
-    rows = c.execute("select id, site from suppliers where site != '' and site is not null "
-                     "and site not in (select url from pages)").fetchall()
+def enrich_sites(c, log, only_ids=None, again=False):
+    """again — обойти и уже обойдённые сайты (новые правила; страницы берутся из кэша, факты только добавляются)."""
+    rows = c.execute("select id, site from suppliers where site != '' and site is not null" +
+                     ("" if again else " and site not in (select url from pages)")).fetchall()
     rows = [r for r in rows if only_ids is None or r["id"] in only_ids]
     log(f"сайты: {len(rows)} к обходу")
 
     def job(r):
         try:
-            return r, crawl(r["site"])
+            res = crawl(r["site"])
+            return r, res, {u: price_file(u) for p in res for u, _ in p[4][:3]}
         except Exception as e:  # noqa: BLE001 — один сломанный сайт не должен ронять сбор
-            return r, e
+            return r, e, {}
 
     with ThreadPoolExecutor(6) as ex:
-        for i, (r, res) in enumerate(ex.map(job, rows), 1):
+        for i, (r, res, prices) in enumerate(ex.map(job, rows), 1):
             ok = isinstance(res, list) and res
             c.execute("insert or replace into pages values(?,?,?,?)", (r["site"], 200 if ok else 0, "", core.now()))
             if ok:
@@ -275,6 +311,8 @@ def enrich_sites(c, log, only_ids=None):
                     core.add_facts(c, r["id"], core.extract(text, main), url, "сайт")
                     for f_url, label in files:
                         core.add_facts(c, r["id"], {"price_list": [(f_url, label)]}, url, "сайт")
+                for f_url, table in prices.items():
+                    core.add_facts(c, r["id"], core.price_list(table or []), f_url, "прайс")
                     if name:  # og:site_name / title главной точнее, чем заголовок страницы из выдачи
                         c.execute("update suppliers set name=? where id=?", (name[:80], r["id"]))
                 inns = {v for (v,) in c.execute("select value from facts where supplier_id=? and field='inn'",
@@ -374,6 +412,7 @@ if __name__ == "__main__":
     ap.add_argument("--cats", default=",".join(core.CAT))
     ap.add_argument("--city", default="Екатеринбург")
     ap.add_argument("--pages", type=int, default=3)
+    ap.add_argument("--again", action="store_true", help="sites: обойти заново и уже обойдённые сайты")
     a = ap.parse_args()
     cats = a.cats.split(",")
     log = lambda m: print(time.strftime("%H:%M:%S"), m, flush=True)  # noqa: E731
@@ -385,10 +424,10 @@ if __name__ == "__main__":
         catalogs(core.connect(), cats, a.pages, log)
     elif a.cmd == "rebuild":  # все города сетей, потом каталоги — по очереди: параллельные запуски упираются в блокировку SQLite
         c = core.connect()
-        for city in dict.fromkeys(x for v in core.NET_CITIES.values() for x in v):
+        for city in core.CITIES:
             web(c, cats, city, log)
         catalogs(c, cats, a.pages, log)
     elif a.cmd == "sites":
-        enrich_sites(core.connect(), log)
+        enrich_sites(core.connect(), log, again=a.again)
     else:
         dadata(core.connect(), log)

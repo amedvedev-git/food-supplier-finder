@@ -1,5 +1,5 @@
 {% from "_icons.html" import icon %}
-{% set SRC = {'yandex': 'выдача Яндекса', 'сайт': 'сайт поставщика', 'productcenter': 'каталог productcenter.ru'} %}
+{% set SRC = {'yandex': 'выдача Яндекса', 'сайт': 'сайт поставщика', 'прайс': 'прайс-лист поставщика', 'productcenter': 'каталог productcenter.ru'} %}
 {% macro facts(k, limit=4) -%}
 {% set arr = (s.facts[k] or [])[:limit] %}
 {% if not arr %}<span class="gap">Нет в открытых источниках — спросим в запросе КП</span>{% endif %}
@@ -26,7 +26,7 @@
   </section>
   <section>
     <h2>Из чего сложился рейтинг</h2>
-    <div class="bigscore"><span class="score lg {{ score_cls(s.score) }}">{{ s.score }}</span>
+    <div class="bigscore"><span class="score lg {{ score_cls(s.score) }}">{{ s.score|px }}</span>
       <p>из 100 для категории «{{ CAT[s.cat].name if s.cat else '' }}», {{ p.city }}</p></div>
     <ul class="why">{% for pts, w in s.why %}<li class="{{ 'neg' if pts < 0 }}"><span class="pts">{{ '%+d'|format(pts) }}</span><span>{{ w|telify }}</span></li>{% endfor %}</ul>
     {% if s.miss %}<h3>Спросим в запросе КП</h3><div class="asks">{% for m in s.miss %}<span class="tag warn">{{ m }}</span>{% endfor %}</div>{% endif %}
@@ -50,19 +50,20 @@
     <h2>Запрос коммерческого предложения</h2>
     <label for="subj-{{ s.id }}">Тема</label><input id="subj-{{ s.id }}" name="subject" value="{{ letter.subject }}">
     <label for="body-{{ s.id }}">Письмо — собрано из того, чего нет в карточке</label>
-    <textarea id="body-{{ s.id }}" name="body">{{ letter.body }}</textarea>
+    <div class="letter"><textarea id="body-{{ s.id }}" name="body">{{ letter.body }}</textarea>
+      <button class="copy" type="button" data-copy title="Скопировать тему и письмо" aria-label="Скопировать тему и письмо">{{ icon('copy') }}</button></div>
     <div class="actions">
       {% if letter.mailto %}<a class="btn" href="{{ letter.mailto }}">{{ icon('mail') }}Открыть в почте</a>
       {% else %}<span class="btn" aria-disabled="true" title="Email не найден">{{ icon('mail') }}Нет email</span>{% endif %}
-      <button class="btn ghost" type="button" data-copy>{{ icon('copy') }}Скопировать</button>
-      <button class="btn ghost star" type="button" data-star="{{ s.id }}" aria-pressed="{{ 'true' if s.mark.starred else 'false' }}">{{ icon('star') }}<span class="label">{{ 'В шортлисте' if s.mark.starred else 'В шортлист' }}</span></button>
     </div>
     <form class="markform" action="/s/{{ s.id }}/mark" method="post" onsubmit="return false">
-      <h3>Статус работы</h3>
+      <h2>Работа с поставщиком</h2>
+      <button class="btn ghost star" type="button" data-star="{{ s.id }}" aria-pressed="{{ 'true' if s.mark.starred else 'false' }}">{{ icon('star') }}<span class="label">{{ 'В шортлисте' if s.mark.starred else 'Добавить в шортлист' }}</span></button>
+      <h3>Статус</h3>
       <div class="status">{% for st in STATUSES %}<input type="radio" name="status" value="{{ st }}" id="st-{{ s.id }}-{{ loop.index }}" {{ 'checked' if (s.mark.status or '') == st }}><label class="chip" for="st-{{ s.id }}-{{ loop.index }}">{{ st or 'Нет' }}</label>{% endfor %}</div>
       <h3>Заметка</h3>
       <textarea name="note" class="note" placeholder="Например: звонили 30.10, ждём прайс до пятницы">{{ s.mark.note }}</textarea>
-      <p class="small muted">Статус и заметка сохраняются сразу.</p>
+      <p class="small muted">Статус и заметка сохраняются сразу; поставщик со статусом тоже попадает в шортлист.</p>
     </form>
   </section>
 </div>

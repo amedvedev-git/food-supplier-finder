@@ -18,7 +18,7 @@
   <div class="sh"><div><h1>{{ s.name }}</h1>
     <div class="meta"><span>{{ legal_line(s) }}</span>{% if kind(s) %}<span class="tag {{ kind(s)[1] }}">{{ kind(s)[0] }}</span>{% endif %}
       <span>{{ zone(s)|capitalize }}</span>{% if s.site %}<a href="{{ s.site }}" target="_blank" rel="noopener">{{ s.site|host }}</a>{% endif %}</div></div>
-    <span class="score lg {{ score_cls(s.score) }}" title="Рейтинг из 100">{{ s.score }}</span></div>
+    <span class="score lg {{ score_cls(s.score) }}" title="Рейтинг из 100">{{ s.score|px }}</span></div>
 </div>
 {% endblock %}
 {% block body %}

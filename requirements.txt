@@ -7,3 +7,5 @@ selectolax>=0.3.21
 pyyaml>=6
 openpyxl>=3.1
 trafilatura>=2.0
+xlrd>=2.0
+pypdf>=5.0

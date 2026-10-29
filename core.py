@@ -71,6 +71,7 @@ NEAR = {"Екатеринбург": {"Екатеринбург", "Свердло
 # города сетей (проверено 29.10.2026: сайт франшизы «Сушкоф и пицца», o.lifemart.ru/cities);
 # малые города Свердловской области засчитываются как регион Екатеринбурга
 NET_CITIES = {"sushkof": ["Екатеринбург", "Тюмень"], "zhiznmart": ["Екатеринбург", "Челябинск", "Тюмень", "Уфа"]}
+CITIES = list(dict.fromkeys(x for v in NET_CITIES.values() for x in v))  # база собрана только по городам сетей
 _WHOLESALE = re.compile(r"(?<![а-яё])опт(?:ом|у|а|ов\w*)?(?![а-яё])|horeca|хорека|поставк|поставщик|дистрибь?ют"
                         r"|для\s+(?:ресторан|кафе|общепит)|производител|b2b", re.I)
 _RESTAURANT = re.compile(r"доставк\w*\s+(?:роллов|суши|пицц|еды|обедов)|наше\s+меню|заказать\s+(?:роллы|пиццу|суши)",
@@ -165,6 +166,67 @@ def extract(text: str, main: str = None) -> dict:
     f["wholesale"] = bool(_WHOLESALE.search(text))
     f["restaurant"] = bool(_RESTAURANT.search(text))
     return f
+
+
+# прайс-листы: колонки находим по заголовку таблицы; без заголовка (PDF) — строка, которая кончается ценой в рублях
+_PL_NAME = re.compile(r"наимен|товар|номенклат|продукц|назван|позици", re.I)
+_PL_PRICE = re.compile(r"цен|стоимост|руб|₽|(?<![а-яё])опт", re.I)
+_PL_SKIP = re.compile(r"сумм|итог|кол-?во|количеств|артикул|(?<![а-яё])код", re.I)
+_PL_MONEY = re.compile(r"(?<![\d*.,])(\d{1,3}(?:[  ]\d{3})*(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?)\s*(?:₽|руб(?![а-яё])\.?|руб\.)",
+                       re.I)
+_PL_UNIT = [("кг", r"кг|вес|(?<!\d)1\s*кг"), ("л", r"л(?![а-яё])|литр"), ("шт", r"шт"), ("уп", r"уп|пач|пак"),
+            ("короб", r"кор")]
+
+
+def item_cats(name: str) -> list:
+    """Категории позиции прайса по первым словам: «Филе угря» — угорь, «Приправа д/говядины» — не мясо.
+    Ключевое слово должно начаться в первых двух словах; дальше регулярка видит всю строку («мясо краба» — не мясо)."""
+    words = list(re.finditer(r"[^\s/,(]+", name))[:2]
+    end = words[-1].end() if words else 0
+    return [cid for cid, rx in _CAT_RE.items() if (m := rx.search(name)) and m.start() < end]
+
+
+def _num(v) -> float:
+    m = re.fullmatch(r"(\d+(?:[.,]\d+)?)(?:₽|руб\.?|р\.?)?", re.sub(r"\s", "", str(v or "")), re.I)
+    return float(m.group(1).replace(",", ".")) if m else 0
+
+
+def price_list(rows, limit=5) -> dict:
+    """Позиции прайс-листа товаров категорий: {"price": [("825 ₽/кг — Голец н/р 40+", строка прайса)]}.
+    rows — строки таблицы (списки ячеек) или строки текста PDF (одна ячейка). Цена — из оптовой колонки, если она
+    есть; не больше limit позиций на категорию."""
+    out, per, head = [], {}, None
+
+    def add(name, price, unit):
+        name = re.sub(r"\s+", " ", name).strip(" .;—–-")
+        cats = item_cats(name)
+        if not cats or not 0 < price < 1_000_000 or all(per.get(c, 0) >= limit for c in cats):
+            return
+        for c in cats:
+            per[c] = per.get(c, 0) + 1
+        u = next((k for k, rx in _PL_UNIT if re.match(rx, unit.strip(), re.I)), "") if unit.strip() else \
+            "кг" if re.search(r"(?<!\d)1\s*кг|(?<![а-яё])вес", name, re.I) else ""
+        p = f"{price:,.2f}".rstrip("0").rstrip(".").replace(",", " ").replace(".", ",")
+        out.append((f"{p} ₽{'/' + u if u else ''} — {_cut(name, 60)}", _cut(name, 220)))
+
+    for r in rows:
+        cells = [str(x if x is not None else "").strip() for x in r]
+        n = next((j for j, x in enumerate(cells) if _PL_NAME.search(x) and len(x) < 40), None)
+        pr = [j for j, x in enumerate(cells) if j != n and len(x) < 40 and _PL_PRICE.search(x) and not _PL_SKIP.search(x)]
+        if n is not None and pr:  # строка заголовка; на следующих листах может быть своя
+            head = (n, next((j for j in pr if re.search(r"(?<![а-яё])опт", cells[j], re.I)), pr[0]),
+                    next((j for j, x in enumerate(cells) if re.match(r"ед|фасов", x, re.I)), None), len(cells))
+        elif head and len(cells) == head[3]:
+            add(cells[head[0]], _num(cells[head[1]]), cells[head[2]] if head[2] is not None else "")
+        else:
+            # ponytail: строка без колонок (PDF) — имя до первой цены, цена последняя (оптовая обычно правее)
+            line = " ".join(x for x in cells if x)
+            ms = list(_PL_MONEY.finditer(line))
+            if ms:
+                name = line[:ms[0].start()]
+                um = re.search(r"(?<![а-яё])(кг|шт|л|уп\w*|пач\w*|кор\w*)\.?\s*$", name, re.I)
+                add(name[:um.start()] if um else name, _num(ms[-1].group(1)), um.group(1) if um else "")
+    return {"price": out}
 
 
 def categorize(text: str) -> list:
@@ -280,8 +342,9 @@ def score(s: dict, cat: str, city: str):
 
 
 def price_ok(value: str, quote: str, cat: str) -> bool:
-    """Цена относится к категории: рядом назван её товар, и за кг/л она правдоподобна."""
-    if not _CAT_RE[cat].search(quote or ""):
+    """Цена относится к категории: рядом назван её товар (у позиции прайса — первыми словами), и за кг/л она
+    правдоподобна."""
+    if not (cat in item_cats(value.split(" — ", 1)[1]) if " — " in value else _CAT_RE[cat].search(quote or "")):
         return False
     num = float(re.sub(r"[^\d.]", "", re.search(r"\d[\d\s]*(?:[.,]\d+)?", value).group().replace(",", ".")))
     return not (re.search(r"(?:/|за)\s*(?:кг|л)(?![а-яё])", value) and num > MAX_KG)
@@ -423,9 +486,9 @@ def search(c, cat=None, city="Екатеринбург", net=None, q="", only=()
 
 
 FILTERS = {  # фильтры выдачи: подпись и условие (после focus)
-    "local": ("Работает в моём регионе", lambda s: any(p > 0 and t.startswith("Работает в регионе") for p, t in s["why"])),
+    "local": ("Локальные", lambda s: any(p > 0 and t.startswith("Работает в регионе") for p, t in s["why"])),
     "price": ("Есть цена", lambda s: bool(s["facts"].get("price"))),
     "contacts": ("Есть контакты", lambda s: bool(s["facts"].get("phone") or s["facts"].get("email"))),
-    "docs": ("Упоминает документы", lambda s: bool(s["facts"].get("docs"))),
+    "docs": ("Есть документы", lambda s: bool(s["facts"].get("docs"))),
 }
 
