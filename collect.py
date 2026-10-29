@@ -352,6 +352,7 @@ def enrich_sites(c, log, only_ids=None, again=False):
 # --- Росаккредитация --------------------------------------------------------------------------------------
 
 FSA_URL = "https://pub.fsa.gov.ru/rds/declaration/view/{}/common"
+FSA_ACTIVE = 6
 _MAKER = re.compile(r'"manufacturerName":\s*"((?:[^"\\]|\\.)*)"')
 
 
@@ -377,7 +378,8 @@ def fsa(c, path, log):
         hits = m and names.get(core.org_key(m.group(1)))
         if hits:
             d = json.loads(line)
-            if d.get("idStatus") != 1 or (d.get("endDate") or "9999") < today:
+            # «действует» в выгрузке — idStatus 6 (у статуса 1 срок истёк у 11 тыс. из 11 тыс. совпадений, 29.10.2026)
+            if d.get("idStatus") != FSA_ACTIVE or (d.get("endDate") or "9999") < today:
                 continue
             addr = (d.get("manufacturerAddress") or "").lower().replace("ё", "е")
             for sid, region in hits:
