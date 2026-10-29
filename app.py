@@ -3,7 +3,8 @@ import io
 import os
 import re
 import threading
-from urllib.parse import quote
+from contextlib import asynccontextmanager
+from urllib.parse import quote, urlencode
 
 from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
@@ -14,7 +15,15 @@ from openpyxl import Workbook
 import collect
 import core
 
-app = FastAPI(title="Поиск поставщиков")
+
+
+@asynccontextmanager
+async def lifespan(_):
+    async with MCP.session_manager.run():  # MCP-сервер смонтирован в конце файла
+        yield
+
+
+app = FastAPI(title="Поиск поставщиков", lifespan=lifespan)
 T = Jinja2Templates(directory=str(core.ROOT / "templates"))
 LABELS = {"price": "Цена", "moq": "Мин. заказ", "delivery": "Доставка", "docs": "Документы", "geo": "География",
           "phone": "Телефон", "email": "Email", "inn": "ИНН", "price_list": "Прайс-лист", "wholesale": "Опт / HoReCa"}
@@ -49,10 +58,14 @@ def db():
 
 def params(request: Request) -> dict:
     p = request.query_params
-    net = p.get("net", "")
+    return make_params(p.get("net", ""), p.get("cat", ""), p.get("city"), p.get("q", ""), p.getlist("only"))
+
+
+def make_params(net="", cat="", city=None, q="", only=()) -> dict:
+    net = net if net in core.NETS else ""
     cities = core.NET_CITIES.get(net, core.CITIES)
-    city = p.get("city") if p.get("city") in cities else cities[0]  # база собрана только по городам сетей
-    return {"net": net, "cat": p.get("cat", ""), "city": city, "q": p.get("q", "").strip(), "only": p.getlist("only")}
+    city = city if city in cities else cities[0]  # база собрана только по городам сетей
+    return {"net": net, "cat": cat if cat in core.CAT else "", "city": city, "q": (q or "").strip(), "only": list(only)}
 
 
 def run_search(p):
@@ -168,8 +181,7 @@ def index(request: Request):
                                                       "job": JOB})
 
 
-def card_context(request, sid):
-    p = params(request)
+def card_context(p, sid):
     s = core.load(db(), sid)
     if not s:
         return None
@@ -180,20 +192,24 @@ def card_context(request, sid):
 
 @app.get("/s/{sid}", response_class=HTMLResponse)
 def supplier(request: Request, sid: int):
-    ctx = card_context(request, sid)
+    ctx = card_context(params(request), sid)
     return T.TemplateResponse(request, "supplier.html", ctx) if ctx else RedirectResponse("/")
 
 
 @app.get("/s/{sid}/panel", response_class=HTMLResponse)
 def panel(request: Request, sid: int):
     """Карточка, раскрытая в строке выдачи."""
-    ctx = card_context(request, sid)
+    ctx = card_context(params(request), sid)
     return T.TemplateResponse(request, "_card.html", ctx) if ctx else HTMLResponse("", status_code=404)
 
 
 @app.post("/s/{sid}/mark")
-def mark(sid: int, status: str = Form(None), note: str = Form(None), starred: str = Form(None), back: str = Form("")):
-    """Меняет только присланные поля: статус из выдачи не затирает заметку и наоборот."""
+async def mark(sid: int, request: Request):
+    """Меняет только присланные поля: статус из выдачи не затирает заметку и наоборот.
+    Форма читается напрямую: Form(None) превращает пустую строку в «не прислано», и статус «Нет» или стёртая
+    заметка не сохранялись."""
+    f = await request.form()
+    status, note, starred, back = f.get("status"), f.get("note"), f.get("starred"), f.get("back", "")
     c = db()
     m = c.execute("select * from marks where supplier_id=?", (sid,)).fetchone()
     old = dict(m) if m else {"status": "", "note": "", "starred": 0}
@@ -310,3 +326,92 @@ def about(request: Request):
          "facts": c.execute("select count(*) from facts").fetchone()[0],
          "src": c.execute("select source, count(distinct supplier_id) from offers group by source").fetchall()}
     return T.TemplateResponse(request, "about.html", {"p": params(request), "n": n})
+
+
+# --- MCP: те же поиск, карточка и письмо КП для ИИ-ассистентов (Claude и др.) ---------------------------------
+# Только чтение: шортлист и заметки остаются в веб-интерфейсе (публичный сервер без авторизации).
+from typing import Any  # noqa: E402
+
+from mcp.server.mcpserver import MCPServer  # noqa: E402
+from mcp.server.transport_security import TransportSecuritySettings  # noqa: E402
+from mcp.types import ToolAnnotations  # noqa: E402
+
+PUBLIC_URL = os.environ.get("PUBLIC_URL", "https://suppliers.alexmedvedev.com")
+T.env.globals["PUBLIC_URL"] = PUBLIC_URL
+MCP = MCPServer("Поставщики food", instructions=(
+    "Поиск поставщиков продуктов питания и упаковки для закупщика сетей «Сушкоф и пицца» и «Жизньмарт» "
+    "(Екатеринбург, Тюмень, Челябинск, Уфа). Данные из открытых источников: у каждого факта есть цитата и ссылка "
+    "на страницу-источник — приводи их пользователю. Чего нет в карточке (цена, минимальный заказ, документы), "
+    "не додумывай: это вопросы в письмо-запрос КП (draft_rfq). Сначала list_categories, потом search_suppliers."))
+RO = ToolAnnotations(readOnlyHint=True, openWorldHint=False)
+
+
+def _card_url(sid, p):
+    return f"{PUBLIC_URL}/s/{sid}?" + urlencode({"cat": p["cat"], "city": p["city"], "net": p["net"]})
+
+
+def _brief(s, p):
+    return {"id": s["id"], "name": s["name"], "score": s["score"], "category": core.CAT.get(s["cat"], {}).get("name"),
+            "legal": legal_line(s), "kind": (kind(s) or [None])[0], "delivery_zone": zone(s),
+            "known": f"{sum(has(s, k) for k, _ in COVERAGE)} из 8", "delivery": allv(s, "delivery") or None,
+            "min_order": first(s, "moq") or None, "price": first(s, "price") or None, "phone": first(s, "phone") or None,
+            "email": first(s, "email") or None, "site": s["site"], "ask_in_rfq": s["miss"], "card": _card_url(s["id"], p)}
+
+
+def _need(cat):
+    if cat and cat not in core.CAT:
+        raise ValueError(f"Нет категории «{cat}». Есть: {', '.join(core.CAT)}")
+
+
+@MCP.tool(annotations=RO, structured_output=True)
+def list_categories() -> dict[str, Any]:
+    """Категории (id для остальных инструментов) по группам, сети, их города и фильтры выдачи."""
+    return {"categories": [{"group": g, "id": c["id"], "name": c["name"], "networks": c["nets"]}
+                           for g, cats in CAT_GROUPS for c in cats],
+            "networks": core.NETS, "cities": core.NET_CITIES,
+            "filters": {k: label for k, (label, _) in core.FILTERS.items()}}
+
+
+@MCP.tool(annotations=RO, structured_output=True)
+def search_suppliers(category: str, city: str = "Екатеринбург", network: str = "", only: list[str] | None = None,
+                     query: str = "", limit: int = 10) -> dict[str, Any]:
+    """Поставщики категории в городе, лучшие по рейтингу 0–100 сверху.
+    only — фильтры из list_categories (local, price, contacts, docs); query — слово в названии или товаре."""
+    _need(category)
+    p = make_params(network, category, city, query, only or [])
+    rows = run_search(p)
+    return {"category": core.CAT[category]["name"], "city": p["city"], "found": len(rows),
+            "suppliers": [_brief(s, p) for s in rows[:max(1, min(limit, 30))]]}
+
+
+@MCP.tool(annotations=RO, structured_output=True)
+def get_supplier(supplier_id: int, category: str = "", city: str = "Екатеринбург", network: str = "") -> dict[str, Any]:
+    """Карточка поставщика: факты с цитатами и ссылками на источник, из чего сложился рейтинг, юрлицо по ЕГРЮЛ."""
+    _need(category)
+    ctx = card_context(make_params(network, category, city), supplier_id)
+    if not ctx:
+        raise ValueError(f"Поставщика {supplier_id} нет")
+    s, p = ctx["s"], ctx["p"]
+    facts = {LABELS.get(k, k): [{"value": v, "quote": q, "source_url": u, "source": src, "date": at[:10]}
+                                for v, q, u, src, at in vals[:6]]
+             for k, vals in s["facts"].items() if k in LABELS and vals and k != "wholesale"}
+    return {**_brief(s, p), "score_breakdown": [{"points": pts, "reason": w} for pts, w in s["why"]],
+            "legal_entity": {k: s["legal"].get(k) for k in ("status", "name", "ogrn", "years", "okved", "address")
+                             if s["legal"].get(k) is not None} | {"inn": s["inn"]},
+            "facts": facts, "other_categories": [core.CAT[c]["name"] for c in ctx["cats"][1:] if c in core.CAT]}
+
+
+@MCP.tool(annotations=RO, structured_output=True)
+def draft_rfq(supplier_id: int, category: str = "", city: str = "Екатеринбург", network: str = "") -> dict[str, Any]:
+    """Письмо-запрос КП: вопросы собраны из того, чего нет в карточке. mailto — ссылка «открыть в почте»."""
+    _need(category)
+    ctx = card_context(make_params(network, category, city), supplier_id)
+    if not ctx:
+        raise ValueError(f"Поставщика {supplier_id} нет")
+    return {"to": first(ctx["s"], "email") or None, **ctx["letter"]}
+
+
+app.mount("/", MCP.streamable_http_app(  # путь /mcp; монтируется последним — веб-маршруты выше имеют приоритет
+    stateless_http=True, json_response=True, transport_security=TransportSecuritySettings(
+        allowed_hosts=[PUBLIC_URL.split("//")[1], "127.0.0.1:*", "localhost:*"],
+        allowed_origins=[PUBLIC_URL, "https://claude.ai", "http://127.0.0.1:*", "http://localhost:*"])))
