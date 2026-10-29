@@ -5,69 +5,90 @@
 /* одна сетка на страницу: 6 колонок, как направляющие в шапке; блоки в ряду одной высоты */
 .g6{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:16px}
 .about{padding-top:40px}
-.about>h2{grid-column:1/-1;margin:24px 0 -4px}.about>h2:first-child{margin-top:0}
-.s2{grid-column:span 2}.s4{grid-column:span 4}.s6{grid-column:1/-1}
-.about .card p{margin:0 0 12px;font-size:14px}.about .card p:last-child{margin-bottom:0}
-.about .card h3{font-size:15px;font-weight:600;margin:0 0 10px}
-.step{display:flex;flex-direction:column;gap:10px;font-size:14px;color:var(--g600);padding:20px}
-.step .n{font:500 22px/1 var(--px);color:var(--teal);letter-spacing:.04em}
-.step b{color:var(--ink);font-size:15px;font-weight:600}
-.big{font:300 56px/1 Onest,sans-serif;letter-spacing:-.04em;margin:0 0 6px}
-.about table td{padding:12px 16px;border-bottom:1px solid var(--g200);font-size:14px}
-.about table td:first-child{width:180px;font-weight:500}.about table td:nth-child(2){width:96px;color:var(--teal);font-weight:600}
-.about ul{margin:0;padding-left:18px;font-size:14px}.about li+li{margin-top:6px}
-ul.plain{list-style:none;padding:0;margin:14px 0 0}
-@media (max-width:1100px){.g6{grid-template-columns:repeat(2,minmax(0,1fr))}.s2,.s4{grid-column:span 2}.step{grid-column:span 1}}
-@media (max-width:640px){.g6{grid-template-columns:minmax(0,1fr)}.s2,.s4,.step{grid-column:1/-1}}
+.about>h2{grid-column:1/-1;font-size:22px;font-weight:600;color:var(--ink);letter-spacing:0;margin:32px 0 0}
+.about>h2:first-child{margin-top:0}
+.about>.sub{grid-column:1/-1;margin:-8px 0 4px;color:var(--g600);max-width:80ch}
+.s2{grid-column:span 2}.s3{grid-column:span 3}.s6{grid-column:1/-1}
+.about .card{padding:20px 22px}
+.about .card h3{font-size:16px;font-weight:600;margin:0 0 8px;color:var(--ink)}
+.about .card p{margin:0;font-size:14px;color:var(--g700);line-height:1.5}.about .card p+p{margin-top:8px}
+.step .n{font:500 22px/1 var(--px);color:var(--teal);letter-spacing:.04em;display:block;margin-bottom:12px}
+.about ul{margin:0;padding-left:18px;font-size:14px;color:var(--g700);line-height:1.5}.about li+li{margin-top:6px}
+.about code{font-size:13px;background:var(--g100);padding:1px 6px;border-radius:6px}
+.stat{display:flex;flex-direction:column;gap:6px}.stat b{font:300 44px/1 Onest,sans-serif;letter-spacing:-.03em;color:var(--ink)}
+.stat span{font-size:14px;color:var(--g600)}
+.about table td{padding:12px 16px;border-bottom:1px solid var(--g200);font-size:14px;vertical-align:top}
+.about table td:first-child{width:180px;font-weight:600}.about table td:nth-child(2){width:96px;color:var(--teal);font-weight:600}
+@media (max-width:1100px){.g6{grid-template-columns:repeat(2,minmax(0,1fr))}.s3,.s6{grid-column:1/-1}.s2{grid-column:span 1}}
+@media (max-width:640px){.g6{grid-template-columns:minmax(0,1fr)}.s2,.s3{grid-column:1/-1}}
 </style>
 {% endblock %}
 {% block band %}
 <div class="wrap band"><h1>Как это работает</h1>
-  <p class="lead">Откуда берутся поставщики, как собираются факты и из чего складывается рейтинг.</p></div>
+  <p class="lead">Сначала — как пользоваться, ниже — откуда данные и как считается рейтинг.</p></div>
 {% endblock %}
 {% block body %}
 <div class="g6 about">
-  <h2>Для кого и зачем</h2>
-  <div class="card s4">
-    <p>Для менеджера по закупкам сети общепита («Сушкоф и пицца», «Жизньмарт»). Обычно поиск поставщика — это Яндекс, 2ГИС, звонки и Excel: часы на одну категорию. Здесь цикл «найти → собрать условия → сравнить → запросить КП» сжат до минут.</p>
-    <p>Главный принцип: <b>каждый факт с источником</b>. У цены, минимального заказа, доставки и документов есть цитата, ссылка на страницу и дата сбора. Если в открытых источниках факта нет, сервис так и пишет: «не найдено». Такой пробел становится вопросом в письме-запросе КП.</p>
-    <p>Те же поиск, карточка с цитатами и письмо КП доступны ИИ-ассистенту (Claude и другим MCP-клиентам) по адресу <code>{{ PUBLIC_URL }}/mcp</code> — только чтение.</p>
-  </div>
-  <div class="card s2">
-    <p class="big">{{ n.suppliers }}</p><p class="muted">поставщиков · {{ n.offers }} предложений · {{ n.facts }} фактов с источниками</p>
-    <ul class="plain small">{% for src, k in n.src %}<li><span class="tag">{{ src }}</span> {{ k }} поставщиков</li>{% endfor %}</ul>
-  </div>
+  <h2 id="use">Как пользоваться</h2>
+  <p class="sub">Сервис для закупщика сети: найти поставщика, понять условия, запросить коммерческое предложение и вести переговоры в одном месте.</p>
+  <div class="card step s2"><span class="n">{{ '01'|px }}</span><h3>Выберите сеть, категорию и город</h3>
+    <p>Список категорий подстраивается под сеть. Город меняет и состав выдачи, и порядок: местные поставщики выше.</p></div>
+  <div class="card step s2"><span class="n">{{ '02'|px }}</span><h3>Сузьте выдачу</h3>
+    <p>«Местные · Возят в город · Все», фильтры «есть цена», «есть контакты», «есть документы», тип компании по ОКВЭД и поиск по названию или товару. Рядом с каждым — сколько подходит.</p></div>
+  <div class="card step s2"><span class="n">{{ '03'|px }}</span><h3>Читайте табло огоньков</h3>
+    <p>Восемь огоньков — цена, мин. заказ, доставка, документы, телефон, email, ИНН, ЕГРЮЛ. Горит — факт найден, у него есть источник. Не горит — спросим в КП.</p></div>
+  <div class="card step s2"><span class="n">{{ '04'|px }}</span><h3>Раскройте поставщика</h3>
+    <p>Слева условия с цитатами и ссылками, документы, юрлицо, контакты. То, чего нет в открытых источниках, отмечено «спросим в КП».</p></div>
+  <div class="card step s2"><span class="n">{{ '05'|px }}</span><h3>Запросите КП</h3>
+    <p>Письмо уже собрано из пробелов карточки — «Открыть в почте» или скопировать. Отметьте статус и оставьте заметку: поставщик попадёт в шортлист.</p></div>
+  <div class="card step s2"><span class="n">{{ '06'|px }}</span><h3>Внесите ответ поставщика</h3>
+    <p>Цена, мин. заказ, доставка, документы из ответа становятся фактами карточки: огонёк загорается, рейтинг пересчитывается, вопрос уходит из письма.</p></div>
+  <div class="card s2"><h3>Сравнение и шортлист</h3>
+    <p>Отметьте галочками в выдаче: «В шортлист» добавит сразу нескольких, «Сравнить» покажет 2–4 поставщиков бок о бок.</p></div>
+  <div class="card s2"><h3>Выгрузка в Excel</h3>
+    <p>«Скачать XLSX» сохраняет текущую выборку; файл назван по категории, городу и дате. Шортлист выгружается отдельно.</p></div>
+  <div class="card s2"><h3>ИИ-ассистент</h3>
+    <p>Те же поиск, карточка и письмо доступны Claude и другим MCP-клиентам по адресу <code>{{ PUBLIC_URL }}/mcp</code> — например: «найди трёх поставщиков моцареллы в Тюмени и подготовь письма».</p></div>
 
-  <h2>Конвейер сбора</h2>
-  <div class="card step"><span class="n">{{ '01'|px }}</span><b>Категории</b>Одно дерево для обеих сетей: ключевые слова, запросы и рубрики каталогов.</div>
-  <div class="card step"><span class="n">{{ '02'|px }}</span><b>Кандидаты</b>Yandex Search API с регионом города и рубрики productcenter.ru. Дубли склеиваются по ИНН и домену.</div>
-  <div class="card step"><span class="n">{{ '03'|px }}</span><b>Обход сайтов</b>Главная, до 6 страниц — сначала доставка и оплата, затем опт, контакты, документы — и страница каталога. Основной контент — без меню и футера.</div>
-  <div class="card step"><span class="n">{{ '04'|px }}</span><b>Факты</b>Правила: ИНН с контрольной суммой, телефоны, email, цена с единицей, минимальный заказ, условия доставки, документы. Цены по позициям — из XLSX- и PDF-прайсов.</div>
-  <div class="card step"><span class="n">{{ '05'|px }}</span><b>Юрлицо</b>ИНН → ЕГРЮЛ через DaData: статус, возраст, ОКВЭД, адрес. Декларации — из реестра Росаккредитации.</div>
-  <div class="card step"><span class="n">{{ '06'|px }}</span><b>Рейтинг</b>Прозрачные баллы под выбранные категорию и город. Цена засчитывается, только если рядом назван товар категории.</div>
+  <h2>Что в базе сейчас</h2>
+  <div class="card s2 stat"><b>{{ n.suppliers }}</b><span>поставщиков по 16 категориям в городах сетей: Екатеринбург, Тюмень, Челябинск, Уфа</span></div>
+  <div class="card s2 stat"><b>{{ n.contacts }}%</b><span>с телефоном или email; действующее юрлицо по ЕГРЮЛ — у {{ n.active }}%</span></div>
+  <div class="card s2 stat"><b>{{ n.docs }}%</b><span>с документами; действующие декларации из реестра Росаккредитации — у {{ n.decl }} поставщиков</span></div>
+
+  <h2>Откуда данные</h2>
+  <div class="card step"><span class="n">{{ '01'|px }}</span><h3>Кандидаты</h3><p>Yandex Search API по региону города и рубрики каталога производителей productcenter.ru. Дубли склеиваются по ИНН и домену.</p></div>
+  <div class="card step"><span class="n">{{ '02'|px }}</span><h3>Сайты</h3><p>Главная и до 6 страниц: сначала доставка и оплата, затем опт, контакты, документы — и страница каталога. Меню и футер отбрасываются.</p></div>
+  <div class="card step"><span class="n">{{ '03'|px }}</span><h3>Прайс-листы</h3><p>XLSX, XLS и PDF с сайта: позиции товаров категории с оптовой ценой, из шапки — ИНН и контакты.</p></div>
+  <div class="card step"><span class="n">{{ '04'|px }}</span><h3>Факты</h3><p>Правила, не нейросеть: цена с единицей, мин. заказ числом, признаки доставки, телефоны, email, ИНН с контрольной суммой. У каждого — цитата.</p></div>
+  <div class="card step"><span class="n">{{ '05'|px }}</span><h3>Проверка</h3><p>ИНН → ЕГРЮЛ через DaData: статус, возраст, ОКВЭД. Декларации — открытые данные реестра Росаккредитации.</p></div>
+  <div class="card step"><span class="n">{{ '06'|px }}</span><h3>Рейтинг</h3><p>Считается при каждом запросе под выбранные категорию и город; каждый балл подписан.</p></div>
 
   <h2>Рейтинг: 100 баллов</h2>
   <div class="tablewrap s6"><table>
-    <tr><td>Релевантность</td><td>до 30</td><td class="muted">предложение в рубрике каталога, категория на сайте и опт/HoReCa; −20, если похоже на ресторан</td></tr>
-    <tr><td>География</td><td>20</td><td class="muted">находится или работает в городе/области; 10 — город только в списке зоны доставки или «доставка по России»</td></tr>
+    <tr><td>Релевантность</td><td>до 30</td><td class="muted">поставщик в рубрике каталога, категория на сайте, опт или HoReCa; −20, если похоже на ресторан</td></tr>
+    <tr><td>География</td><td>20</td><td class="muted">склад или офис в городе или области; 10 — город в списке зоны доставки или «доставка по России»</td></tr>
     <tr><td>Контакты</td><td>10</td><td class="muted">телефон, email</td></tr>
     <tr><td>Условия</td><td>10</td><td class="muted">цена товара категории, минимальный заказ, условия доставки — только разобранные значения</td></tr>
-    <tr><td>Надёжность</td><td>до 25</td><td class="muted">ИНН, действующее юрлицо, на рынке ≥ 3 лет, ОКВЭД опта или производства; −10 за розницу, −20 за общепит</td></tr>
-    <tr><td>Документы</td><td>5</td><td class="muted">действующие декларации в реестре Росаккредитации; если их нет — упоминание на сайте деклараций, ветдокументов, ХАССП, ГОСТ</td></tr>
+    <tr><td>Надёжность</td><td>до 25</td><td class="muted">ИНН, действующее юрлицо, на рынке от 3 лет, ОКВЭД опта или производства; −10 за розницу, −20 за общепит</td></tr>
+    <tr><td>Документы</td><td>5</td><td class="muted">действующие декларации в реестре Росаккредитации; если их нет — упоминание деклараций, ветдокументов, ХАССП на сайте</td></tr>
   </table></div>
 
-  <h2>Принципы и планы</h2>
-  <div class="card s2"><h3>Почему без нейросети в ядре</h3>
-    <p>Правила воспроизводимы, объяснимы закупщику и не ломаются, если внешняя модель недоступна. Нейросети использовались при разработке. LLM стоит добавлять один раз при сборе и только для свободного текста, где правила не справляются, — с обязательной цитатой-доказательством.</p></div>
+  <h2>Принципы</h2>
+  <div class="card s2"><h3>Каждый факт — с источником</h3>
+    <p>У условия есть цитата, ссылка на страницу и дата сбора. Чего нет в открытых источниках, сервис не придумывает: это вопрос в письме-запросе КП.</p></div>
+  <div class="card s2"><h3>Правила в ядре, ИИ — интерфейс</h3>
+    <p>Извлечение и рейтинг сделаны на правилах: результат воспроизводим и объясним. Ассистент через MCP работает поверх тех же проверенных фактов, а не придумывает их.</p></div>
   <div class="card s2"><h3>Честный сбор</h3>
-    <ul><li>robots.txt, паузы между запросами, User-Agent бота с адресом этой страницы.</li>
-      <li>Капчи и антибот-защиту не обходим: такой источник пропускаем.</li>
-      <li>HTML карт (2ГИС, Яндекс.Карты) не парсим, только официальные API.</li>
-      <li>Частных лиц не собираем, только компании.</li></ul></div>
-  <div class="card s2"><h3>Что дальше</h3>
-    <ul><li>LLM-проход по свободному тексту — с обязательной цитатой.</li>
-      <li>Шортлист и статусы через MCP — с авторизацией.</li>
-      <li>Платный 2GIS API: телефоны и рейтинг точек.</li>
-      <li>Передача выбранного поставщика в складской модуль через тот же MCP.</li></ul></div>
+    <ul><li>robots.txt, паузы между запросами, бот с адресом этой страницы.</li>
+      <li>Капчи и антибот-защиту не обходим.</li>
+      <li>Карты — только через официальные API, частных лиц не собираем.</li></ul></div>
+  <div class="card s3"><h3>Ограничения</h3>
+    <ul><li>Цену и минимальный заказ публикуют единицы — поэтому запрос КП.</li>
+      <li>Декларации сверяются только у производителей: в открытых данных реестра нет ИНН заявителя.</li>
+      <li>Шортлист и заметки общие для всех посетителей: это демо без авторизации.</li></ul></div>
+  <div class="card s3"><h3>Что дальше</h3>
+    <ul><li>Передача выбранного поставщика в складской модуль — через тот же MCP.</li>
+      <li>Нейросеть на этапе сбора для условий, написанных свободным текстом, — с проверкой цитаты.</li>
+      <li>Шортлист и статусы через MCP — с авторизацией.</li></ul></div>
 </div>
 {% endblock %}

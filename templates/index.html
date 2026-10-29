@@ -42,7 +42,6 @@
 .contact .host{color:var(--g500);font-size:13px}
 .chev{color:var(--g500);transition:transform .2s cubic-bezier(.2,.8,.2,1)}.open .chev{transform:rotate(180deg);color:var(--ink)}
 .panel{border-top:1px solid var(--g200);background:var(--g100)}
-.panel .panel-link{display:flex;justify-content:flex-end;padding:16px 28px 0;font-size:13px}
 .panel.loading{height:120px;background:linear-gradient(90deg,var(--g100),var(--g50),var(--g100));background-size:200% 100%;animation:sh 1.2s linear infinite}
 @keyframes sh{to{background-position:-200% 0}}
 .selbar{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:var(--white);border-radius:14px;padding:10px;display:flex;align-items:center;gap:8px;box-shadow:0 12px 32px #04040633;font-size:14px;z-index:5}
@@ -56,6 +55,7 @@
 .live b{color:var(--ink);font-weight:600}.live .btn{margin-left:auto}
 .start{padding:56px 0 24px;max-width:860px}
 .start p{color:var(--g600);font-size:16px;margin:14px 0 24px}
+.start p.howto{margin:-10px 0 24px;font-size:15px}.start p.howto a{color:var(--teal);font-weight:500}
 .start .cats{display:flex;gap:8px;flex-wrap:wrap}
 @media (max-width:1100px){
   .row{grid-template-columns:24px 60px 1fr 32px}
@@ -99,6 +99,7 @@
   <p>Выберите сеть и категорию. Сервис покажет поставщиков из открытых источников:<br>
     рейтинг, условия доставки, минимальный заказ, документы, проверку юрлица.<br>
     У каждого факта — ссылка на источник, а пробелы превращаются в вопросы письма-запроса КП.</p>
+  <p class="howto"><a href="/about#use">Как пользоваться — 6 шагов →</a></p>
   <div class="cats">{% for c in CATS if c.nets|length > 1 %}<a class="chip" href="/?cat={{ c.id }}&city={{ p.city|urlencode }}">{{ c.name }}</a>{% endfor %}</div>
 </section>
 {% else %}
@@ -200,7 +201,7 @@ async function toggle(row) {
   const p = document.createElement('div'); p.className = 'panel loading'; row.after(p);
   const html = await (await fetch(row.dataset.panel)).text();
   p.classList.remove('loading');
-  p.innerHTML = `<div class="panel-link"><a href="${row.querySelector('.name').getAttribute('href')}">Открыть отдельной страницей →</a></div>` + html;
+  p.innerHTML = html;
 }
 document.addEventListener('click', e => {
   const row = e.target.closest('.item');

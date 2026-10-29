@@ -224,9 +224,11 @@ def supplier(request: Request, sid: int):
 
 @app.get("/s/{sid}/panel", response_class=HTMLResponse)
 def panel(request: Request, sid: int):
-    """Карточка, раскрытая в строке выдачи."""
+    """Карточка, раскрытая в строке выдачи: со ссылкой «Открыть отдельной страницей»."""
     ctx = card_context(params(request), sid)
-    return T.TemplateResponse(request, "_card.html", ctx) if ctx else HTMLResponse("", status_code=404)
+    if not ctx:
+        return HTMLResponse("", status_code=404)
+    return T.TemplateResponse(request, "_card.html", {**ctx, "in_panel": True})
 
 
 @app.post("/s/{sid}/mark")
@@ -384,10 +386,14 @@ def deck():
 @app.get("/about", response_class=HTMLResponse)
 def about(request: Request):
     c = db()
-    n = {"suppliers": c.execute("select count(*) from suppliers").fetchone()[0],
-         "offers": c.execute("select count(*) from offers").fetchone()[0],
-         "facts": c.execute("select count(*) from facts").fetchone()[0],
-         "src": c.execute("select source, count(distinct supplier_id) from offers group by source").fetchall()}
+    one = lambda sql: c.execute(sql).fetchone()[0]  # noqa: E731
+    cnt = lambda *f: one("select count(distinct supplier_id) from facts where field in (%s)"  # noqa: E731
+                         % ",".join("'%s'" % x for x in f))
+    total = one("select count(*) from suppliers") or 1
+    n = {"suppliers": total, "facts": one("select count(*) from facts"),
+         "contacts": cnt("phone", "email") * 100 // total, "docs": cnt("docs", "decl") * 100 // total,
+         "decl": cnt("decl"),
+         "active": one("select count(*) from suppliers where legal like '%\"ACTIVE\"%'") * 100 // total}
     return T.TemplateResponse(request, "about.html", {"p": params(request), "n": n})
 
 

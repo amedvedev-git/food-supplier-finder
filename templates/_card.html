@@ -2,6 +2,7 @@
    Части — в _card_parts.html; раскрывается в строке выдачи (/s/{id}/panel) и на отдельной странице (/s/{id}) #}
 {% set uid = uid or s.id %}
 {% import "_card_parts.html" as part with context %}
+{% from "_icons.html" import icon %}
 <div class="cv" role="region" aria-label="Карточка: {{ s.name }}">
   <section class="facts-col">
     <h3>Условия поставки</h3>{{ part.conditions() }}
@@ -11,10 +12,10 @@
     {% if cats|length > 1 %}<h3>Другие категории</h3>{{ part.othercats() }}{% endif %}
   </section>
   <aside class="act-col">
-    <h3>Действия</h3>
+    <h3 class="hd">Действия{% if in_panel %}<a class="open" href="/s/{{ s.id }}?cat={{ s.cat }}&city={{ p.city|urlencode }}&net={{ p.net }}">Открыть отдельной страницей{{ icon('external', 'sm') }}</a>{% endif %}</h3>
     {% if s.miss %}<p class="lbl">Спросим в письме</p>{{ part.asks() }}{% endif %}
     {{ part.actions() }}
-    <details class="more"><summary>Письмо-запрос КП</summary>{{ part.letterbox() }}</details>
+    <details class="more" open><summary>Письмо-запрос КП</summary>{{ part.letterbox() }}</details>
     {{ part.markform() }}
     <details class="more"><summary>Внести ответ поставщика на КП</summary>{{ part.kpform() }}</details>
     {{ part.rating() }}
