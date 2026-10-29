@@ -16,6 +16,7 @@ ROOT = Path(__file__).parent
 CATEGORIES = yaml.safe_load((ROOT / "categories.yaml").read_text(encoding="utf-8"))
 CAT = {c["id"]: c for c in CATEGORIES}
 _CAT_RE = {c["id"]: re.compile("|".join(c["kw"]), re.I) for c in CATEGORIES}
+_MINUS = {c["id"]: re.compile("|".join(c["minus"]), re.I) for c in CATEGORIES if c.get("minus")}
 NETS = {"sushkof": "Сушкоф и пицца", "zhiznmart": "Жизньмарт"}
 
 # --- извлечение -------------------------------------------------------------------------------------------
@@ -304,6 +305,8 @@ def score(s: dict, cat: str, city: str):
             why.append((10, "На сайте — опт / HoReCa"))
     if has("restaurant") and not has("wholesale"):
         why.append((-20, "Похоже на ресторан или доставку еды, а не поставщика"))
+    if any(_HOME.search(f"{o.get('title') or ''} {o.get('text') or ''}") for o in s.get("offers") or []):
+        why.append((-10, "Доставка на дом — похоже на розничный магазин"))
 
     near = NEAR.get(city, {city})
     geo = set(vals("geo"))
@@ -494,6 +497,16 @@ def load(c, sid) -> dict:
     return s
 
 
+_HOME = re.compile(r"доставк\w*\s+на\s+дом|доставим\s+на\s+дом|на\s+дом\s+или\s+в\s+офис", re.I)
+
+
+def off_topic(s: dict, cat: str) -> bool:
+    """Не по теме категории: минус-слово в объявлении этой категории (бутыли для воды — не упаковка для доставки)."""
+    rx = _MINUS.get(cat)
+    return bool(rx) and any(rx.search(f"{o.get('title') or ''} {o.get('text') or ''}")
+                            for o in s["offers"] if o["category"] == cat)
+
+
 def search(c, cat=None, city="Екатеринбург", net=None, q="", only=()):
     """Поставщики категории (или по тексту) с рейтингом, лучшие сверху."""
     cats = [cat] if cat else [x["id"] for x in CATEGORIES if not net or net in x["nets"]]
@@ -505,8 +518,10 @@ def search(c, cat=None, city="Екатеринбург", net=None, q="", only=()
     out = []
     for (sid,) in c.execute(sql, args).fetchall():
         s = load(c, sid)
-        best = max((x for x in cats if any(o["category"] == x for o in s["offers"])),
-                   key=lambda x: score(s, x, city)[0])
+        own = [x for x in cats if any(o["category"] == x for o in s["offers"]) and not off_topic(s, x)]
+        if not own:
+            continue
+        best = max(own, key=lambda x: score(s, x, city)[0])
         focus(s, best, city)
         if all(FILTERS[k][1](s) for k in only if k in FILTERS):
             out.append(s)

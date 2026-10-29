@@ -87,6 +87,11 @@ KINDS = {"опт": "Опт", "производитель": "Производит
          "нет данных": "Не определён"}
 
 
+def drop_q(request, key, value=None):
+    """Строка запроса без параметра key (или без одной пары key=value) — ссылка «снять фильтр» на чипе."""
+    return urlencode([(k, v) for k, v in request.query_params.multi_items() if not (k == key and value in (None, v))])
+
+
 def kind_key(s):
     return (kind(s) or ("нет данных",))[0]
 
@@ -187,6 +192,7 @@ def px(n):
 
 
 T.env.filters["px"] = px
+T.env.globals["drop_q"] = drop_q
 T.env.filters["host"] = core.host
 T.env.filters["tel"] = lambda p: f"{p[:2]} {p[2:5]} {p[5:8]}-{p[8:10]}-{p[10:]}" if p and len(p) == 12 else p
 T.env.filters["telify"] = lambda t: re.sub(r"\+7\d{10}", lambda m: T.env.filters["tel"](m.group()), t)

@@ -1,5 +1,5 @@
 """Проверки чистой логики: извлечение фактов из текста и рейтинг. Запуск: python test_core.py"""
-from core import extract, inn_valid, norm_phone, score, focus, categorize, pick_name, better_name, host, price_list, price_ok, price_counts, org_key, region_keys
+from core import extract, inn_valid, norm_phone, score, focus, categorize, pick_name, better_name, host, price_list, price_ok, price_counts, org_key, region_keys, off_topic
 
 # Реальное объявление с agroserver (29.10.2026)
 AGRO = ("Предлагаем к оптовой продаже минтай размера 25+ по ГОСТ. Производитель: Крабозаводск / Ясный. "
@@ -200,6 +200,18 @@ def test_fsa_matching_keys():
     assert org_key("ИП Ширяева Наталия Александровна") == "ширяева наталия александровна"
     assert region_keys("Республика Башкортостан, г. Уфа, Нагаевский") == {"башкорт", "уфа"}
     assert region_keys("Краснодарский край, Славянский р-н") != region_keys("Красноярский край, г Ачинск")
+
+
+def test_minus_words_and_home_delivery():
+    # реальные объявления из проверки топ-10 (29.10.2026)
+    off = lambda title: off_topic({"offers": [{"category": "packaging", "title": title}]}, "packaging")  # noqa: E731
+    assert off("AquaWell — федеральный производитель продукции: бутыль для воды 19л с ручкой")
+    assert off("Завод «Изоком» — производитель теплоизоляции и упаковки из вспененного полиэтилена")
+    assert not off("Изготовление упаковки для фастфуда оптом недорого")
+    s = {"city": "Тюмень", "facts": extract("Продаём рыбу."), "legal": {},
+         "offers": [{"category": "salmon", "source": "yandex", "title": "Crystalfish",
+                     "text": "Охлажденная форель. Доставим на дом или в офис"}]}
+    assert (-10, "Доставка на дом — похоже на розничный магазин") in score(s, "salmon", "Тюмень")[1]
 
 
 def test_score_max_is_100():

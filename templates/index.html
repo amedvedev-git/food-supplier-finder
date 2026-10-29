@@ -13,16 +13,34 @@
 .count-h .lbl{display:flex;flex-direction:column;justify-content:space-between}
 .count-h .lbl>span{text-box:trim-both cap alphabetic}
 .count-h small{color:var(--g500);font-size:15px;letter-spacing:0;text-box:trim-both cap alphabetic}
-.filters{display:flex;flex-direction:column;align-items:flex-end;gap:10px;margin-left:auto}
-.filters .fl{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:flex-end}
-.filters .fl>span{font-size:13px;color:var(--g500);margin-right:2px}
-.filters input{position:absolute;opacity:0;pointer-events:none}
-.filters input:focus-visible+.chip{outline:2px solid var(--teal);outline-offset:2px}
-/* поиск слева, легенда по центру, выгрузка справа */
-.toolbar{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px 24px;padding:0 0 14px;font-size:13px;color:var(--g600)}
-.toolbar .legend{display:flex;gap:18px;flex-wrap:wrap;justify-content:center}
+/* география — светлый сегментный переключатель справа от числа */
+.sum-r{display:flex;align-items:center;gap:10px;margin-left:auto;flex-wrap:wrap}.sum-r .btn{height:40px}
+.segl{display:inline-flex;align-items:center;border:1px solid var(--g300);border-radius:var(--r);padding:3px;background:var(--white);position:relative;gap:2px}
+.segl input{position:absolute;opacity:0;pointer-events:none;width:1px;height:1px}
+.segl label{display:flex;align-items:center;gap:6px;height:32px;padding:0 12px;border-radius:7px;font-size:14px;cursor:pointer;white-space:nowrap;color:var(--g700)}
+.segl label:hover{color:var(--ink);background:var(--g100)}
+.segl label b{font-weight:500;color:var(--g500);font-size:13px}
+.segl input:checked+label{background:var(--ink);color:var(--white)}.segl input:checked+label b{color:var(--cyan)}
+.segl input:focus-visible+label{outline:2px solid var(--teal)}
+.segl .cap{font-size:13px;color:var(--g500);padding:0 6px 0 8px}
+/* строка над таблицей: поиск, «Фильтры» с панелью, включённые фильтры, легенда, выгрузка */
+.toolbar{display:flex;align-items:center;gap:10px 12px;flex-wrap:wrap;padding:0 0 14px;font-size:13px;color:var(--g600)}
+.toolbar .legend{display:flex;gap:18px;flex-wrap:wrap;margin-left:auto}
 .toolbar .lg{display:inline-flex;align-items:center;gap:8px}
-.toolbar>.btn{justify-self:end}
+.fpop{position:relative}
+.fpop>summary{list-style:none;display:inline-flex;align-items:center;gap:8px;height:40px;padding:0 14px;border:1px solid var(--g300);border-radius:var(--r);background:var(--white);font-size:14px;font-weight:500;color:var(--ink);cursor:pointer}
+.fpop>summary::-webkit-details-marker{display:none}
+.fpop>summary:hover,.fpop[open]>summary{border-color:var(--ink)}
+.fpop>summary b{background:var(--ink);color:var(--cyan);border-radius:999px;padding:0 7px;font-size:12px}
+.fpop .pop{position:absolute;top:46px;left:0;z-index:6;width:320px;background:var(--white);border:1px solid var(--g200);border-radius:14px;box-shadow:0 16px 40px #04040624;padding:16px 16px 6px}
+.fpop h4{font-size:13px;font-weight:600;color:var(--g700);margin:0 0 6px}
+.fpop .grp{margin-bottom:14px}
+.fpop label{display:flex;align-items:center;gap:10px;padding:6px 4px;font-size:14px;color:var(--ink);cursor:pointer;border-radius:6px}
+.fpop label:hover{background:var(--g50)}
+.fpop label b{margin-left:auto;font-weight:500;color:var(--g500);font-size:13px}
+.fpop input{accent-color:var(--ink);margin:0;width:16px;height:16px}
+.on-chip{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 8px 0 12px;border-radius:999px;background:var(--ink);color:var(--white);font-size:13px;text-decoration:none}
+.on-chip .ic{width:14px;height:14px;color:var(--g400)}.on-chip:hover .ic{color:var(--white)}
 .find{position:relative;width:min(340px,100%)}
 .find .ic{position:absolute;left:12px;top:12px;color:var(--g500)}
 .find input{font:inherit;font-size:14px;width:100%;height:40px;padding:0 12px 0 36px;border:1px solid var(--g300);border-radius:var(--r);background:var(--white);color:var(--ink)}
@@ -60,10 +78,12 @@
 @media (max-width:1100px){
   .row{grid-template-columns:24px 60px 1fr 32px}
   .row>.cov,.row>.cond,.row>.contact,.lhead>.h-cov,.lhead>.h-cond,.lhead>.h-contact{display:none}
-  .filters{margin-left:0}
+  .toolbar .legend{order:9;width:100%;margin:0}
 }
-@media (max-width:1100px){.toolbar{grid-template-columns:1fr auto}.toolbar .legend{grid-column:1/-1;grid-row:2;justify-content:flex-start}}
-@media (max-width:640px){.count-h .count{font-size:48px}.toolbar{grid-template-columns:1fr}.toolbar>.btn{justify-self:start}.find{width:100%}.live .btn{margin-left:0}}
+@media (max-width:640px){.count-h .count{font-size:48px}.count-h{align-items:center}.count-h .lbl{gap:6px}
+  .count-h .count,.count-h .lbl>span,.count-h small{text-box:normal}
+  .sum-r{margin-left:0;min-width:0;max-width:100%}.segl{overflow-x:auto;max-width:100%;scrollbar-width:none}.find{width:100%}.live .btn{margin-left:0}
+  .fpop .pop{width:min(320px,calc(100vw - 32px))}}
 </style>
 {% endblock %}
 
@@ -106,31 +126,28 @@
 <section class="summary">
   <h1 class="count-h"><span class="count">{{ rows|length }}</span><span class="lbl"><span>{{ plural(rows|length, 'поставщик', 'поставщика', 'поставщиков') }}</span>
     <small>{{ CAT[p.cat].name if p.cat else 'Все категории' ~ (' сети «' ~ NETS[p.net] ~ '»' if p.net else '') }} · {{ p.city }}{% if rows|length != found %} · из {{ found }} найденных{% endif %}</small></span></h1>
-  <div class="filters">
-    <div class="fl" role="radiogroup" aria-label="География">
-      <span>{{ p.city }}:</span>
-      {% for k, (label, _) in GEO.items() %}<input type="radio" name="geo" value="{{ k }}" id="g-{{ k }}" form="search" {{ 'checked' if p.geo == k }}><label class="chip" for="g-{{ k }}" title="{{ GEO_HINTS[k] }}">{{ label }}<b>{{ geos[k] }}</b></label>{% endfor %}
-    </div>
-    <div class="fl" role="group" aria-label="Фильтры">
-    {% for k, (label, _) in FILTERS.items() if k != 'local' %}<input type="checkbox" name="only" value="{{ k }}" id="o-{{ k }}" form="search" {{ 'checked' if k in p.only }}><label class="chip" for="o-{{ k }}" title="{{ HINTS[k] }}">{{ label }}<b>{{ counts[k] }}</b></label>{% endfor %}
-    </div>
-    <div class="fl" role="radiogroup" aria-label="Тип компании" title="По основному ОКВЭД из ЕГРЮЛ">
-      <span>Тип компании:</span>
-      <input type="radio" name="kind" value="" id="k-all" form="search" {{ 'checked' if not p.kind }}><label class="chip" for="k-all">Все</label>
-      {% for k, label in KINDS.items() if kinds[k] or p.kind == k %}<input type="radio" name="kind" value="{{ k }}" id="k-{{ loop.index }}" form="search" {{ 'checked' if p.kind == k }}><label class="chip" for="k-{{ loop.index }}">{{ label }}<b>{{ kinds[k] }}</b></label>{% endfor %}
-    </div>
+  <div class="sum-r"><div class="segl" role="radiogroup" aria-label="География"><span class="cap">{{ p.city }}</span>
+    {% for k, (label, _) in GEO.items() %}<input type="radio" name="geo" value="{{ k }}" id="g-{{ k }}" form="search" {{ 'checked' if p.geo == k }}><label for="g-{{ k }}" title="{{ GEO_HINTS[k] }}">{{ label }}<b>{{ geos[k] }}</b></label>{% endfor %}
   </div>
+  <a class="btn ghost" href="/export.xlsx?{{ request.url.query }}" title="Выгрузить текущую выборку в Excel">{{ icon('download') }}XLSX</a></div>
 </section>
+{% set active = (p.only|length) + (1 if p.kind else 0) %}
 <div class="toolbar">
   <label class="find">{{ icon('search') }}<input type="search" name="q" form="search" value="{{ p.q }}" placeholder="Найти в выдаче: форель, моцарелла…" aria-label="Найти в выдаче по названию и товару"></label>
+  <details class="fpop"><summary>Фильтры{% if active %} <b>{{ active }}</b>{% endif %}</summary>
+    <div class="pop">
+      <div class="grp"><h4>Есть данные</h4>{% for k, (label, _) in FILTERS.items() if k != 'local' %}<label title="{{ HINTS[k] }}"><input type="checkbox" name="only" value="{{ k }}" form="search" {{ 'checked' if k in p.only }}>{{ label|replace('Есть ', '')|capitalize }}<b>{{ counts[k] }}</b></label>{% endfor %}</div>
+      <div class="grp" title="По основному ОКВЭД из ЕГРЮЛ"><h4>Тип компании</h4><label><input type="radio" name="kind" value="" form="search" {{ 'checked' if not p.kind }}>Все</label>{% for k, label in KINDS.items() if kinds[k] or p.kind == k %}<label><input type="radio" name="kind" value="{{ k }}" form="search" {{ 'checked' if p.kind == k }}>{{ label }}<b>{{ kinds[k] }}</b></label>{% endfor %}</div>
+    </div></details>
+  {% for k in p.only if k in FILTERS %}<a class="on-chip" href="?{{ drop_q(request, 'only', k) }}" title="Снять фильтр">{{ FILTERS[k][0] }}{{ icon('x') }}</a>{% endfor %}
+  {% if p.kind %}<a class="on-chip" href="?{{ drop_q(request, 'kind') }}" title="Снять фильтр">{{ KINDS[p.kind] }}{{ icon('x') }}</a>{% endif %}
   <div class="legend"><span class="lg"><span class="leds one"><span class="led on"></span></span>факт найден, у него есть источник</span>
     <span class="lg"><span class="leds one"><span class="led"></span></span>не нашли — вопрос попадёт в запрос КП</span></div>
-  <a class="btn ghost" href="/export.xlsx?{{ request.url.query }}">{{ icon('download') }}Скачать XLSX</a>
 </div>
 
 {% if rows %}
 <div class="ledger" role="table" aria-label="Поставщики">
-  <div class="row lhead" role="row"><span></span><span>Рейтинг</span><span>Поставщик</span><span class="h-cov">Что известно</span><span class="h-cond">Условия</span><span class="h-contact">Контакты</span><span></span></div>
+  <div class="row lhead" role="row"><span></span><span>Рейтинг</span><span>Поставщик</span><span class="h-cov" title="Горит — факт найден, у него есть источник. Не горит — спросим в запросе КП">Что известно</span><span class="h-cond">Условия</span><span class="h-contact">Контакты</span><span></span></div>
   {% for s in rows %}
   {% set k = kind(s) %}
   <div class="row item" role="row" tabindex="0" data-id="{{ s.id }}" data-panel="/s/{{ s.id }}/panel?{{ ctx }}" aria-expanded="false">
@@ -190,6 +207,8 @@ document.addEventListener('change', e => {
   if (e.target.matches('input[name=net]')) filterCats();
   if (e.target.matches('input[name=net], input[name=only], input[name=kind], input[name=geo], select[name=cat], input[name=city], input[name=q]')) form.requestSubmit();
 });
+// панель «Фильтры» закрывается кликом мимо неё
+document.addEventListener('click', e => { document.querySelectorAll('.fpop[open]').forEach(d => { if (!d.contains(e.target)) d.open = false; }); });
 document.addEventListener('search', e => { if (e.target.name === 'q' && !e.target.value) form.requestSubmit(); }, true);
 
 // раскрытие карточки в строке
