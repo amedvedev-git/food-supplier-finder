@@ -106,7 +106,8 @@ YANDEX_API_KEY=… YANDEX_FOLDER_ID=… DADATA_TOKEN=… python collect.py seed 
 uvicorn app:app --port 8766
 ```
 
-Пересборка базы новыми правилами: удалить `data/suppliers.sqlite` и снова запустить `collect.py seed`. Страницы и
+Пересборка базы новыми правилами: `SUPPLIERS_DB=data/rebuild.sqlite python collect.py rebuild --pages 2`
+(все города сетей, потом каталоги, по очереди), проверить и подменить `data/suppliers.sqlite`. Страницы и
 ответы Яндекса и DaData берутся из `data/cache`, поэтому повторный обход и платные запросы не нужны. Свежие данные —
 удалить и `data/cache`.
 

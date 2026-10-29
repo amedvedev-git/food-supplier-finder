@@ -370,7 +370,7 @@ def live(cat, city, extra, log):
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["seed", "web", "catalogs", "sites", "dadata"])
+    ap.add_argument("cmd", choices=["seed", "rebuild", "web", "catalogs", "sites", "dadata"])
     ap.add_argument("--cats", default=",".join(core.CAT))
     ap.add_argument("--city", default="Екатеринбург")
     ap.add_argument("--pages", type=int, default=3)
@@ -383,6 +383,11 @@ if __name__ == "__main__":
         web(core.connect(), cats, a.city, log)
     elif a.cmd == "catalogs":
         catalogs(core.connect(), cats, a.pages, log)
+    elif a.cmd == "rebuild":  # все города сетей, потом каталоги — по очереди: параллельные запуски упираются в блокировку SQLite
+        c = core.connect()
+        for city in dict.fromkeys(x for v in core.NET_CITIES.values() for x in v):
+            web(c, cats, city, log)
+        catalogs(c, cats, a.pages, log)
     elif a.cmd == "sites":
         enrich_sites(core.connect(), log)
     else:
