@@ -7,9 +7,10 @@ SRC=${1:?release dir}
 APP=/opt/suppliers
 
 id suppliers >/dev/null 2>&1 || useradd --system --home-dir "$APP" --shell /usr/sbin/nologin suppliers
-mkdir -p "$APP/data" "$APP/templates"
+mkdir -p "$APP/data" "$APP/templates" "$APP/static"
 cp "$SRC"/*.py "$SRC"/categories.yaml "$SRC"/requirements.txt "$APP"/
 cp "$SRC"/templates/*.html "$APP"/templates/
+cp "$SRC"/static/* "$APP"/static/
 [ -x "$APP/.venv/bin/python" ] || python3 -m venv "$APP/.venv"
 "$APP/.venv/bin/pip" install -q -r "$APP/requirements.txt"
 chown -R suppliers:suppliers "$APP"
