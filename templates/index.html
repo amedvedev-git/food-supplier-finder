@@ -46,6 +46,14 @@
 .find input{font:inherit;font-size:14px;width:100%;height:40px;padding:0 12px 0 36px;border:1px solid var(--g300);border-radius:var(--r);background:var(--white);color:var(--ink)}
 .find input:hover{border-color:var(--g400)}.find input:focus{outline:none;border-color:var(--ink)}
 .ledger{background:var(--white);border:1px solid var(--g200);border-radius:14px;overflow:clip}
+.ledger .item[hidden]{display:none}
+/* страницы по 20 и «Показать ещё» */
+.pager{display:flex;flex-direction:column;align-items:center;gap:14px;margin-top:20px}
+.pager .pages{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
+.pager .pages button,.pager .pages span{min-width:36px;height:36px;padding:0 8px;border-radius:9px;font:inherit;font-size:14px;display:inline-flex;align-items:center;justify-content:center}
+.pager .pages button{border:1px solid var(--g300);background:var(--white);color:var(--ink);cursor:pointer}.pager .pages button:hover{border-color:var(--ink)}
+.pager .pages button[aria-current]{background:var(--ink);border-color:var(--ink);color:var(--white)}
+.pager .pages span{color:var(--g500)}
 .row{display:grid;grid-template-columns:28px 64px minmax(230px,1.5fr) 184px minmax(220px,1.3fr) minmax(180px,1fr) 32px;gap:20px;align-items:center;padding:16px 20px;border-top:1px solid var(--g200)}
 .lhead{border-top:0;padding-top:12px;padding-bottom:12px;font-size:14px;font-weight:600;color:var(--g700);background:var(--g50);position:sticky;top:0;z-index:2}
 .item{cursor:pointer}.item:hover{background:var(--g50)}.item.open{background:var(--g100)}
@@ -166,6 +174,9 @@
   </div>
   {% endfor %}
 </div>
+{% if rows|length > 20 %}
+<div class="pager" id="pager" role="navigation" aria-label="Страницы выдачи"><button class="btn ghost" type="button" id="more"></button><div class="pages"></div></div>
+{% endif %}
 {% else %}
 <div class="ledger empty"><p>По этим условиям поставщиков пока нет.</p><p class="small">Снимите часть фильтров{% if p.q %} или очистите поиск в выдаче{% endif %}.</p></div>
 {% endif %}
@@ -263,6 +274,33 @@ toshort.addEventListener('click', async () => {
   shortN(n); clearPicks();
   toast((add ? 'Добавлено в шортлист: ' : 'Убрано из шортлиста: ') + ids.length);
 });
+
+// страницы по 20: показаны строки [from, to); «Показать ещё» дописывает следующие 20, номер страницы — переходит на неё
+const pager = document.getElementById('pager');
+if (pager) {
+  const PER = 20, items = [...document.querySelectorAll('.ledger .item')], last = Math.ceil(items.length / PER);
+  let from = 0, to = PER;
+  const paint = () => {
+    items.forEach((r, i) => {
+      r.hidden = i < from || i >= to;
+      if (r.hidden && r.classList.contains('open')) toggle(r);  // закрыть раскрытую карточку на скрытой строке
+    });
+    const left = items.length - to, cur = [Math.floor(from / PER) + 1, Math.ceil(Math.min(to, items.length) / PER)];
+    const more = document.getElementById('more');
+    more.hidden = left <= 0; more.textContent = `Показать ещё ${Math.min(PER, left)}`;
+    // 1 … соседние … последняя
+    const show = [...new Set([1, last, ...Array.from({ length: 5 }, (_, i) => cur[1] - 2 + i)])].filter(k => k >= 1 && k <= last).sort((a, b) => a - b);
+    pager.querySelector('.pages').innerHTML = show.map((k, i) => (i && k - show[i - 1] > 1 ? '<span>…</span>' : '')
+      + `<button type="button" data-page="${k}"${k >= cur[0] && k <= cur[1] ? ' aria-current="page"' : ''}>${k}</button>`).join('');
+  };
+  document.getElementById('more').onclick = () => { to += PER; paint(); };
+  pager.onclick = e => {
+    const b = e.target.closest('[data-page]'); if (!b) return;
+    from = (b.dataset.page - 1) * PER; to = from + PER; paint();
+    document.querySelector('.ledger').scrollIntoView({ behavior: 'smooth' });
+  };
+  paint();
+}
 {% if job.running %}
 const poll = setInterval(async () => {
   const j = await (await fetch('/live/status')).json();
