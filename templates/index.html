@@ -73,7 +73,7 @@
 .live b{color:var(--ink);font-weight:600}.live .btn{margin-left:auto}
 .start{padding:56px 0 24px;max-width:860px}
 .start p{color:var(--g600);font-size:16px;margin:14px 0 24px}
-.start p.howto{margin:-10px 0 24px;font-size:15px}.start p.howto a{color:var(--teal);font-weight:500}
+.start-h{display:flex;align-items:baseline;flex-wrap:wrap;gap:8px 32px}.start .howto{font-size:18px;color:var(--teal);font-weight:500}
 .start .cats{display:flex;gap:8px;flex-wrap:wrap}
 @media (max-width:1100px){
   .row{grid-template-columns:24px 60px 1fr 32px}
@@ -115,11 +115,10 @@
 
 {% if not (p.cat or p.q or p.net) %}
 <section class="start">
-  <h1>С чего начать</h1>
+  <div class="start-h"><h1>С чего начать</h1><a class="howto" href="/about#use">Как пользоваться — 6 шагов →</a></div>
   <p>Выберите сеть и категорию. Сервис покажет поставщиков из открытых источников:<br>
     рейтинг, условия доставки, минимальный заказ, документы, проверку юрлица.<br>
     У каждого факта — ссылка на источник, а пробелы превращаются в вопросы письма-запроса КП.</p>
-  <p class="howto"><a href="/about#use">Как пользоваться — 6 шагов →</a></p>
   <div class="cats">{% for c in CATS if c.nets|length > 1 %}<a class="chip" href="/?cat={{ c.id }}&city={{ p.city|urlencode }}">{{ c.name }}</a>{% endfor %}</div>
 </section>
 {% else %}

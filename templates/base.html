@@ -23,7 +23,7 @@ h1{margin:0;font-weight:300;font-size:40px;line-height:1.1;letter-spacing:-.03em
 h2{font-size:13px;font-weight:500;color:var(--g500);margin:0 0 12px;letter-spacing:.02em}
 
 /* шапка: графит и направляющие, как у Goulash.tech */
-.top{background:var(--ink);color:var(--white);background-image:linear-gradient(90deg,#ffffff0d 1px,transparent 1px);background-size:calc((100% - 64px)/6) 100%;background-position:32px 0}
+.top{position:relative;background:var(--ink);color:var(--white);background-image:linear-gradient(90deg,#ffffff0d 1px,transparent 1px);background-size:calc((100% - 64px)/6) 100%;background-position:32px 0}
 .bar{display:flex;align-items:center;height:64px;gap:32px;border-bottom:1px solid #ffffff1a}
 .brand{display:flex;align-items:center;gap:14px;font:500 26px/1 var(--px);letter-spacing:.04em;text-decoration:none;color:var(--white)}
 .mark{width:22px;height:22px;border-radius:6px;background:var(--cyan);display:grid;grid-template-columns:repeat(3,1fr);padding:4px;gap:2px}
@@ -37,7 +37,7 @@ nav b{font-weight:500;color:var(--ink);background:var(--cyan);border-radius:999p
 .back{color:var(--g400);text-decoration:none;font-size:14px;display:inline-flex;gap:6px;align-items:center;margin-bottom:14px}.back:hover{color:var(--white)}
 
 /* поля на графите */
-.controls{display:grid;grid-template-columns:auto minmax(240px,400px) auto;justify-content:start;gap:16px;align-items:end}
+.controls{display:grid;grid-template-columns:minmax(max-content,1fr) minmax(240px,1fr) minmax(max-content,1fr);gap:16px;align-items:end}
 .field{display:flex;flex-direction:column;gap:8px;font-size:12px;color:var(--g400);letter-spacing:.02em;min-width:0}
 .field select,.field input{font:inherit;font-size:15px;color:var(--white);background:var(--g800);border:1px solid var(--g700);border-radius:var(--r);height:44px;padding:0 14px;width:100%;letter-spacing:0}
 .field select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%23a4a4a8' stroke-width='1.75'%3E%3Cpath d='m4 6 4 4 4-4'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center;padding-right:40px}
@@ -46,7 +46,7 @@ nav b{font-weight:500;color:var(--ink);background:var(--cyan);border-radius:999p
 .field select:hover,.field input:hover{border-color:var(--g600)}.field select:focus,.field input:focus{outline:none;border-color:var(--cyan)}
 .seg{display:flex;background:var(--g800);border:1px solid var(--g700);border-radius:var(--r);padding:3px;height:44px}
 .seg input{position:absolute;opacity:0;pointer-events:none}
-.seg label{font-size:14px;color:var(--g400);padding:0 14px;border-radius:7px;cursor:pointer;white-space:nowrap;display:flex;align-items:center;letter-spacing:0}
+.seg label{flex:1 1 auto;justify-content:center;font-size:14px;color:var(--g400);padding:0 14px;border-radius:7px;cursor:pointer;white-space:nowrap;display:flex;align-items:center;letter-spacing:0}
 .seg label:hover{color:var(--white)}
 .seg input:checked+label{background:var(--white);color:var(--ink);font-weight:500}
 .seg input:focus-visible+label{outline:2px solid var(--cyan)}
@@ -160,7 +160,18 @@ ul.why .pts{font-weight:600;color:var(--teal)}ul.why .neg .pts{color:var(--bad)}
 .toast[hidden]{display:block;opacity:0;pointer-events:none}
 main{padding-bottom:96px}
 @media (max-width:1100px){.controls{grid-template-columns:1fr 1fr}.controls>.field:first-child{grid-column:1/-1}}
-@media (max-width:640px){.wrap{padding:0 16px}.controls{grid-template-columns:1fr}.seg{overflow-x:auto;scrollbar-width:none}nav a:not(.on){display:none}h1{font-size:32px}}
+/* демо-ролик в попапе */
+.demo{padding:0;border:0;border-radius:14px;background:var(--ink);width:min(1100px,calc(100vw - 32px));overflow:visible}
+.demo::backdrop{background:rgb(4 4 6 / .82)}
+.demo video{display:block;width:100%;aspect-ratio:16/9;border-radius:14px;background:var(--ink)}
+.demo .x{position:absolute;top:-44px;right:0;width:36px;height:36px;border:0;border-radius:999px;background:var(--white);color:var(--ink);font-size:22px;line-height:36px;cursor:pointer}
+.burger{display:none;margin-left:auto;width:40px;height:40px;border:1px solid var(--g700);border-radius:var(--r);background:none;cursor:pointer;flex-direction:column;justify-content:center;align-items:center;gap:5px}
+.burger i{display:block;width:18px;height:2px;border-radius:1px;background:var(--white)}
+@media (max-width:640px){.wrap{padding-left:16px;padding-right:16px}.controls{grid-template-columns:1fr}.seg{overflow-x:auto;scrollbar-width:none}.seg label{padding:0 8px;font-size:13px}h1{font-size:32px}
+  .band{padding-top:20px;padding-bottom:28px}
+  .burger{display:flex}
+  nav{display:none;position:absolute;top:64px;left:0;right:0;z-index:30;flex-direction:column;gap:0;margin:0;padding:4px 16px 12px;background:var(--ink);border-bottom:1px solid #ffffff1a;font-size:17px}
+  nav.open{display:flex}nav a{padding:12px 0}}
 </style>
 {% block head %}{% endblock %}
 </head>
@@ -168,10 +179,12 @@ main{padding-bottom:96px}
 <header class="top">
   <div class="wrap bar">
     <a class="brand" href="/"><span class="mark"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>Поставщики</a>
-    <nav>
+    <button class="burger" type="button" aria-label="Меню" aria-expanded="false" aria-controls="nav"><i></i><i></i><i></i></button>
+    <nav id="nav">
       <a href="/" class="{{ 'on' if request.url.path == '/' }}">Поиск</a>
       <a href="/shortlist?city={{ p.city|urlencode }}" class="{{ 'on' if request.url.path == '/shortlist' }}">Шортлист<b id="shortn">{{ shortlist_n() or '' }}</b></a>
       <a href="/about" class="{{ 'on' if request.url.path == '/about' }}">Как это работает</a>
+      <a href="/demo.mp4" data-demo>Демо</a>
       <a href="/deck" target="_blank" rel="noopener">Презентация</a>
     </nav>
   </div>
@@ -179,7 +192,15 @@ main{padding-bottom:96px}
 </header>
 <main><div class="wrap">{% block body %}{% endblock %}</div></main>
 <div class="toast" id="toast" hidden></div>
+<dialog class="demo" id="demo" aria-label="Демо-ролик"><button class="x" type="button" aria-label="Закрыть">×</button><video controls playsinline preload="none" src="/demo.mp4"></video></dialog>
 <script>
+{  // мобильное меню и попап с демо-роликом
+  const nav = document.getElementById('nav'), burger = document.querySelector('.burger'), demo = document.getElementById('demo'), vid = demo.querySelector('video');
+  burger.onclick = () => burger.setAttribute('aria-expanded', nav.classList.toggle('open'));
+  document.querySelector('[data-demo]').onclick = e => { e.preventDefault(); nav.classList.remove('open'); demo.showModal(); vid.play(); };
+  demo.onclick = e => { if (e.target === demo || e.target.closest('.x')) demo.close(); };
+  demo.onclose = () => vid.pause();
+}
 function shortN(n) { document.getElementById('shortn').textContent = n || ''; }
 function setStar(id, on) {  // кнопки «В шортлист» и звёздочки у названия в строках выдачи
   document.querySelectorAll(`[data-star="${id}"]`).forEach(b => {

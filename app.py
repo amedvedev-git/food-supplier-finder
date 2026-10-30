@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from urllib.parse import quote, urlencode
 
 from fastapi import FastAPI, Form, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from markupsafe import Markup
 from openpyxl import Workbook
@@ -387,6 +387,12 @@ def deck():
     return HTMLResponse('<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" '
                         'content="width=device-width, initial-scale=1"></head><body>'
                         + (core.ROOT / "templates" / "deck.html").read_text(encoding="utf-8") + "</body></html>")
+
+
+@app.get("/demo.mp4")
+def demo():
+    """Ролик-тур по прототипу (собран в deck/video, HyperFrames) — для попапа «Демо»."""
+    return FileResponse(core.ROOT / "static" / "demo.mp4", media_type="video/mp4")
 
 
 @app.get("/about", response_class=HTMLResponse)
