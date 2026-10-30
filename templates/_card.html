@@ -12,7 +12,7 @@
     {% if cats|length > 1 %}<h3>Другие категории</h3>{{ part.othercats() }}{% endif %}
   </section>
   <aside class="act-col">
-    <h3 class="hd">Действия{% if in_panel %}<a class="open" href="/s/{{ s.id }}?cat={{ s.cat }}&city={{ p.city|urlencode }}&net={{ p.net }}">Открыть отдельной страницей{{ icon('external', 'sm') }}</a>{% endif %}</h3>
+    <h3 class="hd">Действия{% if in_panel %}<a class="open" href="/s/{{ s.id }}?cat={{ s.cat }}&city={{ p.city|urlencode }}&net={{ p.net }}" target="_blank" rel="noopener">Открыть отдельной страницей{{ icon('external', 'sm') }}</a>{% endif %}</h3>
     {% if s.miss %}<p class="lbl">Спросим в письме</p>{{ part.asks() }}{% endif %}
     {{ part.actions() }}
     <details class="more" open><summary>Письмо-запрос КП</summary>{{ part.letterbox() }}</details>
