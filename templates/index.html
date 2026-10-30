@@ -48,7 +48,7 @@
 .ledger{background:var(--white);border:1px solid var(--g200);border-radius:14px;overflow:clip}
 .ledger .item[hidden]{display:none}
 /* страницы по 20 и «Показать ещё» */
-.pager{display:flex;flex-direction:column;align-items:center;gap:14px;margin-top:20px}
+.pager{display:flex;flex-direction:column;align-items:center;gap:14px;margin-top:20px}.pager[hidden],.pager [hidden]{display:none}
 .pager .pages{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
 .pager .pages button,.pager .pages span{min-width:36px;height:36px;padding:0 8px;border-radius:9px;font:inherit;font-size:14px;display:inline-flex;align-items:center;justify-content:center}
 .pager .pages button{border:1px solid var(--g300);background:var(--white);color:var(--ink);cursor:pointer}.pager .pages button:hover{border-color:var(--ink)}
@@ -288,6 +288,7 @@ if (pager) {
     const left = items.length - to, cur = [Math.floor(from / PER) + 1, Math.ceil(Math.min(to, items.length) / PER)];
     const more = document.getElementById('more');
     more.hidden = left <= 0; more.textContent = `Показать ещё ${Math.min(PER, left)}`;
+    pager.hidden = from === 0 && left <= 0;  // показаны все — ни кнопки, ни страниц
     // 1 … соседние … последняя
     const show = [...new Set([1, last, ...Array.from({ length: 5 }, (_, i) => cur[1] - 2 + i)])].filter(k => k >= 1 && k <= last).sort((a, b) => a - b);
     pager.querySelector('.pages').innerHTML = show.map((k, i) => (i && k - show[i - 1] > 1 ? '<span>…</span>' : '')
